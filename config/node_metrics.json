@@ -1,0 +1,11 @@
+{
+    "EDDIES-DESKTOP": {
+        "system": "Windows",
+        "version": "10.0.19043",
+        "machine": "AMD64",
+        "processor": "AMD64 Family 23 Model 113 Stepping 0, AuthenticAMD",
+        "hostname": "EDDIES-DESKTOP",
+        "total_virtual_memory": 15.95,
+        "cpu_count": 12
+    }
+}
