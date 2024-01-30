@@ -2,7 +2,7 @@
 
 ![Image of Corporate America city](https://i.imgur.com/mJsrg0y.png)
 
-Fully parallel autonomous task completion AI utilizing Agents and Workers to achieve project completion times faster than ever before.
+Self-Operated Agent Protocol (soap) is a fully functional OOTB framework for running autonomous agents to perform tasks with minimal human intervention
 ## Required
 
 General Requirements
