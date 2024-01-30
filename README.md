@@ -1,4 +1,4 @@
-# Corporate America
+# SOAP (formerly Corporate America)
 
 ![Image of Corporate America city](https://i.imgur.com/mJsrg0y.png)
 
