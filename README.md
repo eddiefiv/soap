@@ -5,9 +5,9 @@
 Fully parallel autonomous task completion AI utilizing Agents and Workers to achieve project completion times faster than ever before.
 ## Required
 
-General Requirements
+### General Requirements
 - Python 3.9 or greater
-Requirements for `llama-cpp-python`
+### Requirements for `llama-cpp-python`
 - Git
 - Cmake
 - Visual Studio Community
@@ -16,7 +16,7 @@ Requirements for `llama-cpp-python`
     - Linux embedded development with C++
 ## Getting Started and Installation
 
-**Install llama-cpp**
+### Install llama-cpp
 
 Install from either one of the guides to ensure the right version and type of `llama-cpp` is installed
 
@@ -28,13 +28,13 @@ Install from either one of the guides to ensure the right version and type of `l
 
 [Windows](https://python.langchain.com/docs/integrations/llms/llamacpp#installation-with-windows)
 
-**Clone this repository**
+### Clone this repository
 
 ```shell
 git clone https://eddiefiv/CorporateAmerica.git
 ```
 
-**Install Python dependencies**
+### Install Python dependencies
 ```shell
 pip install -r requirements.txt
 ```

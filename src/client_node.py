@@ -20,8 +20,8 @@ async def main():
     main_proc.start()
 
     # Keep alive thread
-    #ka_thread = Process(target = sync_keep_alive, args = (keep_alive, True), name = "Thread-KeepAlive")
-    #ka_thread.start()
+    ka_thread = Process(target = sync_keep_alive, args = (keep_alive, True), name = "Thread-KeepAlive")
+    ka_thread.start()
 
     # Main process start node
     await start_node()
