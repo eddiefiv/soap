@@ -3,6 +3,7 @@ import jsonpickle
 import websockets
 import asyncio
 import multiprocessing
+import time
 
 from multiprocessing import Queue
 
@@ -52,48 +53,23 @@ class Node():
         except:
             print_warning(text = "Node couldnt update metrics config. Directory may not exist.")
 
-    async def serve_and_listen(self):
-        '''Serves a WebSocket server that listens for any and all messages. This is how function calls will be made.
-        Only ONE server can be active at a given time, and this is why there can only be one :class:`Node` instance on a single machine.'''
-        self.host = "localhost"
-        self.port = 5002
-
-        async with websockets.serve(self.ws_main, self.host, self.port) as ws: # Serve the WS
+    async def listen(self):
+        '''Begin listening to the localhost WebSocket'''
+        async with websockets.connect("ws://localhost:5002") as ws:
             self.ws = ws
             print_step(f"Node on {gethostname()} started!", justification = "center", style = "green1")
-            print_substep(f"NODE: WebSocket served at {self.host} on port {self.port}", style = "bright_blue")
-            await asyncio.Future()
+            
+            while True:
+                res = await ws.recv()
+                res = json.loads(res)
+                print(res)
+                await self._parse(res) # TODO: Create new process on each parse. Processes will autokill after completion, no need to .join()
 
     async def inference(self):
         '''Inferences the LLM with the main prompt that is then to be split up into tasks amongst the :class:`Agent`'s'''
         pass
 
-    async def ws_main(self, websocket):
-        # Store a copy of the connected client
-        self.clients.append(websocket)
-        # Handle incoming messages
-        try:
-            async for message in websocket:
-                # Parse incomming message
-                print(f"INCOMING MESSAGE: {message}")
-                to_all = await self._parse(json.loads(message), websocket)
-                print("done parsing")
-                if to_all:
-                    #Send a response to all connected clients except sender
-                    for conn in self.clients:
-                        if conn != websocket:
-                            await conn.send(message)
-        # Handle disconnecting clients
-        except websockets.exceptions.ConnectionClosed as e:
-            print_warning("A client just disconnected") # TODO: Handle graceful disconnection of agents and workers
-        finally:
-            self.clients.remove(websocket)
-
-    async def _parse(self, msg, sender):
-        if msg['type'] == "heartbeat":
-            #print_substep(f"NODE: Heartbeat from {sender}", style = "bright_blue")
-            if sender in self.clients:
-                print("Found sender in client list.")
+    async def _parse(self, msg):
         if msg['target'] == "node":
             if msg['type'] == "function_invoke":
                 if msg['data']['function_to_invoke'] == "attach_agent": # Specific bc of the way the parameters are serialized

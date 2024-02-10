@@ -1,2 +1,5 @@
 *.exe
+*.pyc
 disctoken.txt
+node_modules
+venv

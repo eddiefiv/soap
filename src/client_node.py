@@ -15,13 +15,17 @@ from utils.helpers.all_helpers import create_ws_message
 from utils.console import *
 
 async def main():
+    # Check to make sure localhost ws is served before proceeding
+    if not await is_localhost_served():
+        print_error("No running localhost websocket. Run localserve.js then try again.")
+        quit()
     # Listener
     main_proc = Process(target = sync_localhost, args = (listen_localhost, True), name = "Process-NODE")
     main_proc.start()
 
     # Keep alive thread
-    ka_thread = Process(target = sync_keep_alive, args = (keep_alive, True), name = "Thread-KeepAlive")
-    ka_thread.start()
+    #ka_thread = Process(target = sync_keep_alive, args = (keep_alive, True), name = "Thread-KeepAlive")
+    #ka_thread.start()
 
     # Main process start node
     await start_node()
@@ -29,7 +33,7 @@ async def main():
 async def start_node():
     node = Node(ntype = NodeType.CLIENT, max_agents = 2)
     node.set_metrics_config()
-    await node.serve_and_listen()
+    await node.listen()
     #agent = Agent(uses_inference_endpoint = True, inference_endpoint = "http://localhost:5001/")
 
     #node.attach_agent(agent)
@@ -69,7 +73,6 @@ async def keep_alive():
 
 async def listen_localhost():
     print_substep("SYSTEM: Starting listening process on ws://localhost:5002", style = "bright_blue")
-    time.sleep(2) # Allow time for WebSocket to spin up
     async with websockets.connect("ws://localhost:5002", ping_timeout = None) as ws:
         await agent_deployer(ws)
         while True:
@@ -86,6 +89,15 @@ async def agent_deployer(ws): # TODO: Notify the agent when a worker is complete
     await ws.send(create_ws_message(type = "function_invoke", origin = "entry_script", target = "node", data = {"function_to_invoke": "attach_agent", "params": {"uses_inference_endpoint": True, "inference_endpoint": "http://localhost:5001", "uid": jsonpickle.encode(uuid.uuid4())}}))
     #await ws.send(create_ws_message(type = "function_invoke", origin = "entry_script", target = "node", data = {"function_to_invoke": "attach_agent", "params": {"uses_inference_endpoint": True, "inference_endpoint": "http://localhost:5001", "uid": jsonpickle.encode(uuid.uuid4())}}))
     print_substep("SYSTEM: Agent Deployer finished", style = "green1")
+
+async def is_localhost_served():
+    try:
+        ws = await websockets.connect("ws://localhost:5002")
+        await ws.close()
+        return True
+    except Exception as e:
+        print(e)
+        return False
 
 if __name__ == "__main__":
     # Run listener

@@ -55,10 +55,13 @@ class Agent():
                 async for message in ws:
                     try:
                         print("Listening...")
+                        print(message)
                         res = json.loads(message)
+                        print(type(res))
+                        print(res['type'])
 
                         # Maybe create a new thread to parse and run workers if the websocket keeps cutting out during task awaiting
-                        await self._parse(res)
+                        await self._parse(message)
                     except Exception as e:
                         print_error(f"{type(e)}: {e}")
                         ws.close()

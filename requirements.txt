@@ -1,0 +1,7 @@
+jsonpickle==3.0.2
+psutil==5.9.8
+requests==2.31.0
+rich==13.7.0
+selenium==4.17.2
+urllib3==2.2.0
+websockets==12.0]
