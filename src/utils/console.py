@@ -1,4 +1,7 @@
 import re
+import datetime
+import os
+import json
 
 from rich.columns import Columns
 from rich.console import Console
@@ -11,6 +14,20 @@ from rich.style import StyleType
 
 console = Console()
 
+# Get the directory of the script being executed
+current_directory = os.path.dirname(os.path.abspath(__file__))
+
+# Navigate to the parent directory (Corporate America) relative to the script's directory
+parent_directory = os.path.abspath(os.path.join(current_directory, os.pardir, os.pardir))
+
+# Navigate to the config directory relative to the script's directory
+config_directory = os.path.join(parent_directory, 'config')
+
+# Path to the node_metrics.json file relative to the script's directory
+node_metrics_file_path = os.path.join(config_directory, 'node_metrics.json')
+
+# Path to the global.jsoon file relative to the script's directory
+global_config_file_path = os.path.join(config_directory, 'global.json')
 
 def print_markdown(text):
     """Prints a rich info message. Support Markdown syntax."""
@@ -56,13 +73,44 @@ def make_table(title, items: list, columns: list, color="yellow"):
 
 def print_substep(text, style=""):
     """Prints a rich info message without the panelling."""
-    console.print(text, style=style)
+    console.print(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S:%f')}] {text}", style=style)
+
+def print_success(text):
+    print_substep(text = text, style = "green1")
+
+def print_info(text):
+    print_substep(text = f"INFO: {text}", style = "bright_blue")
 
 def print_warning(text):
     print_substep(text = f"WARNING: {text}", style = "gold3")
 
 def print_error(text):
     print_substep(text = f"ERROR: {text}", style = "red1")
+
+def print_debug(text):
+    if global_config['dev']['debug_mode']:
+        print_substep(text = f"DEBUG: {text}", style = "dark_green")
+
+try:
+    with open(global_config_file_path, 'r') as f:
+        _r = f.read()
+        global_config = json.loads(_r)
+except Exception as e:
+    print_error(text = f"Console couldnt load and set configs from config.json, resorting to default configs. {e}")
+    global_config = {
+        "general": {
+            "agent_count": 2,
+            "worker_count": 3
+        },
+        "models": {
+            "70b_filepath": None,
+            "13b_filepath": None,
+            "7b_filepath": None
+        },
+        "dev": {
+            "debug_mode": False
+        }
+    }
 
 def handle_input(
     message: str = "",

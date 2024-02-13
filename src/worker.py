@@ -12,11 +12,10 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 from multiprocessing import Queue
 
-from utils.helpers.constants import WorkerState, WorkerTask
+from utils.helpers.constants import *
 from utils.helpers.worker_helpers import SingleInstruction, MultiInstruction
 from utils.helpers.all_helpers import create_ws_message
-from utils.console import print_substep, print_step, print_table
-
+from utils.console import *
 
 class Worker():
     '''The :class:`Worker` holds the code that actually carries out an action given by an :class:`Agent`.
@@ -26,11 +25,11 @@ class Worker():
 
     def __init__(self, parent_agent, task_queue: Queue, uid):
         self.is_working = False
-        self.status: WorkerState = WorkerState.IDLE
-        self._parent_agent = parent_agent
+        self.state: WorkerState = WorkerState.STARTING
+        self._parent_agent_name = parent_agent
         self.worker_uuid = uid.hex
         self.task_queue = task_queue
-        self.worker_name = self._parent_agent.agent_name + "_Worker-" + self.worker_uuid
+        self.worker_name = self._parent_agent_name + "_Worker-" + self.worker_uuid
         self.web_driver_path = "webdrivers/chromedriver-win64/chromedriver.exe" if platform.system() == "Windows" else "webdrivers/chromdriver-linux64/chromedriver"
 
     def sync_start(self):
@@ -49,36 +48,47 @@ class Worker():
     async def start(self):
         '''Starts the :class:`Worker`. Initially, the worker will run through it's first retrieved task, then listen for websocket messages.
         Only run this method once as it would break this current worker process to have this ran twice.'''
-        print_step(f"{self.worker_name} with ID {self.worker_uuid} initialized!", style = "green1")
-        await self.start_selenium() # Start selenium preemptively
+
+        # Initialize first
+        await self.init()
+
         async with websockets.connect("ws://localhost:5002", ping_timeout = None) as ws:
             self.ws = ws
-            print_substep(f"{self.worker_name}: Connected and awaiting task...", style = "green1")
+            print_substep(f"{self.worker_name}: Connected and awaiting instruction from Agent or External source...", style = "bright_blue")
+
+            # Let parent Agent know this Worker is ready for tasks
+            self.state = WorkerState.READY
+            await ws.send(create_ws_message(type = "worker_ready", origin = self.worker_name, target = self._parent_agent_name))
             while True:
-                # Wait for task
-                self.current_task = self.task_queue.get(block = True, timeout = None)
-                # Perform the task NOTE: During task execution, messages will not be received by the client
-                await self.give_instructions(self.current_task)
                 # Wait for new messages when task is fully complete
                 res = await ws.recv() # TODO: Test full messging system, and ensure all communication is success. Still needs messaging system for give agent tasks. Queue system from node to agent.
+                print_debug(res)
                 res = json.loads(res)
-                print(res)
+                await self._parse(res)
+
+    async def init(self):
+        '''Does any pre-ready initializing tasks'''
+
+        # Start selenium preemptively
+        await self.start_selenium()
+
+        print_success(f"{self.worker_name} with ID {self.worker_uuid} initialized!")
 
     async def start_selenium(self):
         print_substep(f"{self}: Selenium starting...", style = "bright_blue")
-        self.status = WorkerState.STARTING
+        self.state = WorkerState.STARTING
         # Start selenium in headless ChromeDriver
         self._chrome_options = ChromeOptions()
         self._chrome_options.add_argument("--headless=new")
         self._chrome_options.add_argument("--log-level=3")
         self.web_driver = webdriver.Chrome(options = self._chrome_options)
         # Set back to idle after browser is launched
-        self.status = WorkerState.IDLE
+        self.state = WorkerState.IDLE
 
     def stop_selenium(self):
         '''Rough close. Selenium will not wait for current action to be done, will just straight up close the WebDriver.'''
         print_substep(f"Selenium stopping on {self}...", style = "bright_blue")
-        self.status = WorkerState.STOPPING
+        self.state = WorkerState.STOPPING
 
         self.web_driver.close()
 
@@ -86,34 +96,68 @@ class Worker():
         if isinstance(instructions, SingleInstruction) or isinstance(instructions, MultiInstruction):
             _i = 1
             for instruction in instructions.get_action_list():
-                self.status = WorkerState.TRANSITIONING
+                self.state = WorkerState.TRANSITIONING
                 print_substep(f"{self} | Running instruction {_i} of {len(instructions.get_action_list())}...", style = "cyan1")
                 print_table(f"{self} Instruction {_i}", items = [[instruction.task.name, instruction.action]], columns = ["Task ID", "Task Action"], color = "blue1")
                 await self.do(instruction)
                 print_substep(f"{self} | Instruction {_i} of {len(instructions.get_action_list())} complete!", style = "cyan1")
                 _i += 1
             await self.report_completion()
+        else:
+            print_error(f"{self.worker_name}: Cannot parse task, discarding...")
 
     async def report_completion(self):
         '''Reports back to the parent :class:`Agent` to inform it that the task has been completed and it is ready for a new one.'''
+        self.state = WorkerState.IDLE
         self.is_working = False
-        await self.ws.send(create_ws_message(type = "worker_complete", target = self._parent_agent.agent_name, origin = self.worker_name, data = {"result": "success", "task": jsonpickle.encode(self.current_task)}))
+        await self.ws.send(create_ws_message(type = "worker_complete", target = self._parent_agent_name, origin = self.worker_name, data = {"result": "success", "task": {"instruction_type": "multi", "instruction_set": [(instruction.out()[0].value, instruction.out()[1]) for instruction in self.current_task._instructions]}}))
         self.current_task = None
 
+    async def update_state(self, new_state: WorkerState):
+        self.state = new_state
+
+        await self.ws.send(create_ws_message(type = "worker_update", origin = self.worker_name, target = self._parent_agent_name, data = {"new_state": new_state.value})) # TODO
+
+    async def _parse(self, msg):
+        if msg['target'] == self.worker_name:
+            if msg['type'] == "worker_dequeue":
+                await self.dequeue()
+
+    async def dequeue(self):
+        '''Grabs the first task from the Worker Task Queue and begins to run the tasks sequentially.'''
+        print_info(f"{self.worker_name}: Awaiting task from Worker Task Queue...")
+        while not self.task_queue.empty():
+            self.current_task = self.task_queue.get(block = True, timeout = 5)
+
+            if self.current_task is not None:
+                print_success(f"{self.worker_name}: Found and executing task {self.current_task} from Worker Task Queue")
+
+                # Perform the task NOTE: During task execution, messages will not be received by this client
+                await self.give_instructions(self.current_task)
+            else:
+                print_warning(f"{self.worker_name}: Worker Task Queue empty, returning to IDLE")
+                self.state = WorkerState.IDLE
+
+                # Let parenting Agent know
+                await self.ws.send(create_ws_message(type = "worker_complete", origin = self.worker_name, target = self.agent))
+
     async def do(self, instruction: SingleInstruction):
-        _task = instruction.task
-        if _task == WorkerTask.GOTO:
+        _task = instruction.task.value
+        print_debug(_task)
+        if _task == WorkerTask.GOTO.value:
             await self.goto(instruction.action)
-        elif _task == WorkerTask.SCREENSHOT:
-            await self.screenshot_full(self._page, self.worker_uuid)
+        elif _task == WorkerTask.SCREENSHOT.value:
+            await self.screenshot_full(self.worker_uuid)
+        else:
+            print_error(f"Invalid WorkerTask type: {_task}")
 
     async def goto(self, url):
         '''Goes to the specified url and returns a page'''
-        self.status = WorkerState.GOING
+        self.state = WorkerState.GOING
         self.is_working = True
 
         # Do the actual going to the specified URL
-        self.web_driver.goto(url)
+        self.web_driver.get(url)
 
     async def click_browser_selector(self, id, x: int, y: int):
         '''Click somewhere on the browser given a provided selector. Element is located by ID. Make sure the ID is passed properly.'''
@@ -122,11 +166,14 @@ class Worker():
 
     async def screenshot_full(self, filepath):
         '''Takes a screenshot of the full page and returns the bytes result.'''
-        self.status = WorkerState.SCREENSHOTTING
+        self.state = WorkerState.SCREENSHOTTING
 
         # Take the full screenshot
-        _p = self.worker_uuid + ".png"
-        self.web_driver.save_screenshot(filename = _p)
+        try:
+            _p = self.worker_uuid + ".png"
+            self.web_driver.save_screenshot(filename = _p)
+        except Exception as e:
+            print_error("Failed to ss" + e)
 
     def __str__(self):
         return f"Worker {self.worker_name}"

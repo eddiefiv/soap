@@ -63,7 +63,6 @@ def sync_keep_alive(awaitable, new_loop):
 
 async def keep_alive():
     print_substep("SYSTEM: Starting Keep Alive thread on ws://localhost:5002", style = "bright_blue")
-    time.sleep(2) # Allow time for WebSocket to spin up
     async with websockets.connect("ws://localhost:5002") as ws:
         while True:
             await ws.send(create_ws_message(type = "ping", origin = "entry_script", target = "any_agent"))
@@ -85,8 +84,8 @@ async def listen_localhost():
 async def agent_deployer(ws): # TODO: Notify the agent when a worker is complete to receive next task. Node-agent-worker flow is success
     '''A temporary ws connection to deploy the initial :class:`Agent`'s and attach them to the node'''
     print_substep("SYSTEM: Starting Agent Deployer", style = "bright_blue")
-    time.sleep(2) # Allow time for WebSocket to spin up
-    await ws.send(create_ws_message(type = "function_invoke", origin = "entry_script", target = "node", data = {"function_to_invoke": "attach_agent", "params": {"uses_inference_endpoint": True, "inference_endpoint": "http://localhost:5001", "uid": jsonpickle.encode(uuid.uuid4())}}))
+    msg = create_ws_message(type = "function_invoke", origin = "entry_script", target = "any_node", data = {"function_to_invoke": "attach_agent", "params": {"uses_inference_endpoint": True, "inference_endpoint": "http://localhost:5001", "uid": jsonpickle.encode(uuid.uuid4())}})
+    await ws.send(msg)
     #await ws.send(create_ws_message(type = "function_invoke", origin = "entry_script", target = "node", data = {"function_to_invoke": "attach_agent", "params": {"uses_inference_endpoint": True, "inference_endpoint": "http://localhost:5001", "uid": jsonpickle.encode(uuid.uuid4())}}))
     print_substep("SYSTEM: Agent Deployer finished", style = "green1")
 

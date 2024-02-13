@@ -4,8 +4,9 @@ import asyncio
 import uuid
 import websockets
 import jsonpickle
-import threading
+import multiprocessing
 import time
+import llama_cpp
 
 from urllib import parse
 
@@ -13,9 +14,9 @@ from multiprocessing import Queue
 # from queue import Queue
 
 from utils.helpers.agent_helpers import get_inference_config, validate_endpoint
-from utils.helpers.worker_helpers import SingleInstruction, MultiInstruction
+from utils.helpers.worker_helpers import *
 from utils.helpers.all_helpers import create_ws_message
-from utils.helpers.constants import HTTPMethod, WorkerState, WorkerTask
+from utils.helpers.constants import *
 
 from utils.console import *
 
@@ -28,51 +29,97 @@ class Agent():
     An :class:`Agent` must be attached to a Node in order to receive instruction, this can be done
     by calling `.attach_agent()` on the parent :class:`Node`.'''
 
-    workers = []
-
-    def __init__(self, uses_inference_endpoint = True, inference_endpoint = "http://localhost:5001", uid = "", agent_task_queue: Queue = None) -> None:
+    def __init__(self, global_config, parent_node_name, uses_inference_endpoint = True, inference_endpoint = "http://localhost:5001", uid = "", agent_task_queue: Queue = None) -> None:
         self._uses_inference_endpoint = uses_inference_endpoint
         self._inference_endpoint = inference_endpoint
         self._inference_config = get_inference_config()
-        self.agent_id = uid.hex if uid != "" else uuid.uuid4().hex
         self.is_valid = validate_endpoint(inference_endpoint) # Is the endpoint a valid and reachable endpoint. If false, the endpoint may be incorrectly written or not open
+
+        # Set the global config sent from the node
+        self.global_config = global_config
+
+        self._parent_node_name = parent_node_name
+
+        self.agent_id = uid.hex if uid != "" else uuid.uuid4().hex
         self.agent_name = f"Agent-{self.agent_id}"
+
         self.agent_task_queue = agent_task_queue
         self.task_queue = Queue()
+
+        # A list of workers in this Agent's Fleet
+        self._workers = []
+
+        # Whether to continue dequeuing after a single dequeue or not
+        self.persist_dequeue = True
 
     async def start(self):
         '''Starts the :class:`Agent` and beings listening for instruction on the localhost server.
         Wont be able to send messages to the websocket server without having received a message first that prompts a sent message.
         Must be ran in order to give tasks to :class:`Worker`'s'''
-        async for ws in websockets.connect("ws://localhost:5002", ping_interval = None):
+        async with websockets.connect("ws://localhost:5002") as ws:
+            self.ws = ws
+            #hb = threading.Thread(target = self.sync_heartbeat, args = (ws, 2)) # Start the heartbeating thread to keep this connection alive
+            #hb.start()
+
+            # Load configs before informing node of readyness
+            _successfully_connected_workers = await self.init()
+
+            print_substep(f"{self.agent_name}: Ready to receive instruction from Node!", style = "green1")
+
+            # Wait until all workers are ready and idle to proceed
+            while len(self._workers) != len(self.get_ready_workers()):
+                res = await ws.recv()
+                res = json.loads(res)
+                if res['target'] == self.agent_name and res['type'] == "worker_ready":
+                    for i in range(len(self._workers)):
+                        print_debug(self._workers[i])
+                        if self._workers[i]['name'] == res['origin']:
+                            self._workers[i]['state'] = WorkerState.READY.value
+                            print_debug(self._workers)
+
+            # Let all workers begin dequeue
+            for worker in self._workers:
+                worker['state'] = WorkerState.IDLE.value
+                await ws.send(create_ws_message(type = "worker_dequeue", origin = self.agent_name, target = worker['name']))
+
+            # Ready this Agent and let the Node know
+            await ws.send(create_ws_message(type = "agent_ready", origin = self.agent_name, target = self._parent_node_name))
+
+            while True:
+                try:
+                    #print_debug("Listening...")
+                    res = await ws.recv()
+                    res = json.loads(res)
+                    #print_debug(res)
+                    assert type(res) == dict, print_error("Received message is not of type 'dict'")
+
+                    # Maybe create a new thread to parse and run workers if the websocket keeps cutting out during task awaiting
+                    await self._parse(res)
+                except Exception as e:
+                    print_error(f"Problem occurred during parsing {type(e)}: {e}")
+                    #self.start # Try to notify Node somehow for a more graceful shutdown
+
+    async def init(self) -> int:
+        '''Attaches :class:`Workers` and sets up any other pre-ready configurations'''
+        _num_max_workers = self.global_config['general']['worker_count']
+        _num_success = 0
+
+        print_info(f"{self.agent_name}: Beginning creating and attaching Workers...")
+
+        for _ in range(_num_max_workers):
             try:
-                self.ws = ws
-                #hb = threading.Thread(target = self.sync_heartbeat, args = (ws, 2)) # Start the heartbeating thread to keep this connection alive
-                #hb.start()
+                print_info(f"{self.agent_name}: Creating and attaching Worker {_} of {_num_max_workers}")
+                await self._employ_worker(self.agent_name, self.task_queue, uuid.uuid4())
+                _num_success += 1
+            except:
+                print_error(f"{self.agent_name}: Worker creation and attachment failed. Skipping.")
 
-                await ws.send(create_ws_message(type = "agent_ready", origin = self.agent_name, target = "node")) # Let the node know that this agent is ready to begin tasking
-                print_substep(f"{self.agent_name}: Ready to receive instruction from Node!", style = "green1")
-                async for message in ws:
-                    try:
-                        print("Listening...")
-                        print(message)
-                        res = json.loads(message)
-                        print(type(res))
-                        print(res['type'])
-
-                        # Maybe create a new thread to parse and run workers if the websocket keeps cutting out during task awaiting
-                        await self._parse(message)
-                    except Exception as e:
-                        print_error(f"{type(e)}: {e}")
-                        ws.close()
-                        #self.start # Try to notify Node somehow for a more graceful shutdown
-            except websockets.ConnectionClosed as e: # Handle spontaneous disconnects and reconnect when occurred
-                continue
+        print_success(f"{self.agent_name}: Successfully created and attached {_num_success} of {_num_max_workers} Workers!")
 
     def sync_start(self):
         '''Starts the :class:`Agent` and beings listening for instruction on the localhost server.
         Wont be able to send messages to the websocket server without having received a message first that prompts a sent message.
-        Must be ran in order to give tasks to :class:`Worker`'s'''
+        Must be ran in order to give tasks to :class:`Workers`'''
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(self.start())
@@ -92,24 +139,46 @@ class Agent():
         while True:
             print_substep(f"{self.agent_name}: Sending heartbeat.", style = "bright_blue")
             try:
-                await ws.send(create_ws_message(type = "heartbeat", origin = self.agent_name, target = "node", data = {}))
+                await ws.send(create_ws_message(type = "heartbeat", origin = self.agent_name, target = self._parent_node_name, data = {}))
             except:
                 print_error("Couldnt send heartbeat. Trying again.")
             time.sleep(interval)
 
-    async def run_dequeue(self):
-        '''Grabs the first task from the Agent Task Queue and inferences to split it up into smaller tasks for the :class:`Worker`'s.
+    async def dequeue(self):
+        '''Grabs the first task from the Agent Task Queue and inferences to split it up into smaller tasks for the :class:`Workers`.
         NOTE: :class:`Agent` will NOT receive messages from the localhost during this time. Only when the task has been inferenced and put into
         the Task Queue will it listen again.'''
-        print_substep(f"{self.agent_name}: Beginning scanning for tasks in Agent Task Queue...", style = "bright_blue")
+        print_info(f"{self.agent_name}: Beginning scanning for tasks in Agent Task Queue...")
         # Wait to get a task from Node
         try:
             task = self.agent_task_queue.get(block = True, timeout = None)
 
+            print_success(f"{self.agent_name}: Agent found task: {task}")
+
             # NOTE: In production, task would inference on Agent further, then be sent to Workers
             await self.instruct("null", task)
+
+            # Let parenting Node know an item has been pulled and dealt with
+            await self.ws.send(create_ws_message(type = "agent_dequeue_success", origin = self.agent_name, target = self._parent_node_name))
         except Exception as e:
-            print_error("Agent Task Queue empty. Didnt retrieve any data.")
+            print_error(f"Agent Task Queue empty. Didnt retrieve any data. {e}")
+
+    def get_idle_workers(self):
+        _idle_workers = []
+
+        for worker in self._workers:
+            if worker["state"] == WorkerState.IDLE.value:
+                _idle_workers.append(worker)
+        return _idle_workers
+
+    def get_ready_workers(self):
+        _idle_workers = []
+
+        for worker in self._workers:
+            if worker["state"] == WorkerState.READY.value:
+                _idle_workers.append(worker)
+        #print_debug(_idle_workers)
+        return _idle_workers
 
     async def flush_agent(self):
         '''Essentially reset the :class:`Agent` after all tasks given are completed. This usually includes after the Agent Task Queue is empty as well.
@@ -124,13 +193,45 @@ class Agent():
                 elif msg['data']['function_to_invoke'] == "_put_queue":
                     _deserialized_item = jsonpickle.decode(msg['data']['params']['item'])
                     self._put_queue(item = _deserialized_item)
+            elif msg['type'] == "worker_update":
+                for i in range(len(self._workers)):
+                    if self._workers[i]['name'] == msg['origin']:
+                        self._workers[i]['state'] == msg['data']['new_state']
+            elif msg['type'] == "worker_ready":
+                _idx = self.find_worker_idx_from_name(msg['origin'])
+
+                if _idx is not None:
+                    self._workers[_idx]['state'] == WorkerState.DEQUEUE.value
+                await self.ws.send(create_ws_message(type = "worker_dequeue", origin = self.agent_name, target = msg['origin']))
             elif msg['type'] == "worker_complete":
-                print(f"{msg['origin']} completed their task: {msg['data']['result']}")
+                _idx = self.find_worker_idx_from_name(msg['origin'])
+
+                # Re-dequeue the worker on it's completion if the Worker Task Queue isn't empty. Based on global configs, this may not be the case and the worker may be terminated.
+                print_success(f"{self.agent_name}: {msg['origin']} completed their task: {msg['data']['result']}. Worker is now open for pulling from Worker Task Queue again.")
+
+                # If the queue isn't empty, keep dequeing idle workers, otherwise check to see if all workers are finished and if so, then inform the parenting node and await further instruction
+                if not self.task_queue.empty():
+                    if _idx is not None:
+                        self._workers[_idx]['state'] == WorkerState.DEQUEUE.value
+                    await self.ws.send(create_ws_message(type = "worker_dequeue", origin = self.agent_name, target = msg['origin']))
+                else:
+                    if _idx is not None:
+                        self._workers[_idx]['state'] == WorkerState.IDLE.value
+                    if len(self._workers) == len(self.get_idle_workers()): # If the number of idle workers is the same as the number of attached workers
+                        await self.ws.send(create_ws_message(type = "agent_complete", origin = self.agent_name, target = self._parent_node_name))
             elif msg['type'] == "agent_dequeue":
-                await self.run_dequeue()
+                # Dequeue agent then let Node know when finished for further instruction
+                await self.dequeue()
             elif msg['type'] == "ping":
                 print_substep(f"{self.agent_name}: Received ping from {msg['origin']}", style = "bright_blue")
                 return True # Maybe send a pong back to the Node. If need be
+
+    def find_worker_idx_from_name(self, name):
+        '''Tries to find an entry in self.agents matching the given name. Returns None if nothing is found'''
+        for i in range(len(self._workers)):
+            if self._workers[i]['name'] == name:
+                return i
+        return None
 
     def _put_queue(self, item):
         '''Put an item into the Task Queue. Active :class:`Worker`'s will automatically get items out of the Task Queue and run them as they're available.
@@ -147,8 +248,13 @@ class Agent():
         #assert self.is_valid, "No valid endpoint provided, please update the endpoint using .update_endpoint() and then .reload_agent()"
 
         _prompt = "\n### Instruct: \n".join([prompt])
-        await self._employ_worker(self, self.task_queue, uuid.uuid4())
+        task = reconstruct_multi_instruction(task)
         self.task_queue.put(task)
+
+        # Unidle all workers that were previously idle
+        for worker in self.get_idle_workers():
+            await self.ws.send(create_ws_message(type = "worker_dequeue", origin = self.agent_name, target = worker['name']))
+
         # TODO
         # if self._uses_inference_endpoint:
         #     _r = self._post(path = "api/v1/generate", body = self._gen_body(_prompt))
@@ -169,7 +275,7 @@ class Agent():
 
     def on_worker_complete(self, worker: Worker):
         '''Should only be called as a callback function when a :class:`Worker` is complete with their given task'''
-        if worker not in self.workers: # If the worker the call was from is not an attached worker
+        if worker not in self._workers: # If the worker the call was from is not an attached worker
             print("Task completion callback received from unknown Worker. Ignoring completion call.")
         else:
             print(f"Worker: {worker.worker_uuid} completed their task.")
@@ -179,9 +285,9 @@ class Agent():
         print_substep(f"{self.agent_name}: Employing new Worker with UUID: {uuid}", style = "bright_blue")
 
         worker = Worker(parent_agent = parent_agent, task_queue = task_queue, uid = uuid)
-        self.workers.append(worker)
+        self._workers.append({"name": worker.worker_name, "state": WorkerState.IDLE.value})
 
-        _p = threading.Thread(target = worker.sync_start, name = f"Thread-{worker.worker_name}")
+        _p = multiprocessing.Process(target = worker.sync_start, name = f"Thread-{worker.worker_name}")
         _p.start() # Start the new worker process
 
     def test(self):

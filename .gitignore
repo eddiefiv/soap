@@ -3,3 +3,5 @@
 disctoken.txt
 node_modules
 venv
+llama-cpp-python
+models/*
