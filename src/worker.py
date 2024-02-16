@@ -151,6 +151,8 @@ class Worker():
         else:
             print_error(f"Invalid WorkerTask type: {_task}")
 
+    # ----- INSTRUCTIONS -----
+
     async def goto(self, url):
         '''Goes to the specified url and returns a page'''
         self.state = WorkerState.GOING
@@ -174,6 +176,9 @@ class Worker():
             self.web_driver.save_screenshot(filename = _p)
         except Exception as e:
             print_error("Failed to ss" + e)
+
+    async def write_to_file(self, content, extension):
+        pass
 
     def __str__(self):
         return f"Worker {self.worker_name}"

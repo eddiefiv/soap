@@ -24,8 +24,8 @@ messages.append(user_prompt)
 
 llm = Llama(
     model_path = "models/openhermes-2.5-mistral-7b.Q5_K_M.gguf",
-    n_gpu_layers = 41,
-    n_ctx = 2048,
+    n_gpu_layers = 33,
+    n_ctx = 8192,
     n_batch = 256,
     verbose = True
 )
@@ -33,9 +33,9 @@ llm = Llama(
 #llm.tokenize(bytes(messages))
 
 output = llm.create_completion(
-    prompt = CHAT_ML_PROMPT_FORMAT(SYSTEM_PROMPT_OCR_WIN_LINUX, "I want to take a screenshot of the youtube website."),
+    prompt = CHAT_ML_PROMPT_FORMAT(SYSTEM_PROMPT_OCR_WIN_LINUX, "I want to make a discord bot to run on my machine. It should have 2 slash commands: mainMenu and settingsMenu. Both menus should display a simple embed and 1 red button for deleting the message (closing out the menu)."),
     temperature = 0.7,
-    max_tokens = 3000,
+    max_tokens = 16000,
     top_p = 0.92,
     min_p = 0.05,
     repeat_penalty = 1.1,

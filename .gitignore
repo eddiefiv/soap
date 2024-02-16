@@ -1,7 +1,12 @@
 *.exe
 *.pyc
+*.png
+
 disctoken.txt
+
 node_modules
 venv
 llama-cpp-python
+w64devkit
+
 models/*

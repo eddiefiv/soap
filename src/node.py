@@ -128,14 +128,22 @@ class Node():
                 ins = msg['data']['instruction']
 
                 # Parse and send the prompt to the model to be inferenced
-                model = load_model(os.path.join(self.global_config['models_folderpath'], self.global_config['llama_cpp_settings']['7b']['filepath']))
-                out = inference_model(model, CHAT_ML_PROMPT_FORMAT, SYSTEM_PROMPT_OCR_WIN_LINUX, ins, self.global_config['llama_cpp_settings']['hyperparams'])
-                out = json.loads(out)
+                try:
+                    model = load_model(os.path.join(self.global_config['models_folderpath'], self.global_config['llama_cpp_settings']['7b']['filepath']))
+                    out = inference_model(model, CHAT_ML_PROMPT_FORMAT, SYSTEM_PROMPT_OCR_WIN_LINUX, ins, self.global_config['llama_cpp_settings']['hyperparams'])
+                    if out is not None:
+                        out = json.loads(out)
 
-                # Take the output and verify it is in the proper format
-                if 'item' in out['results'][-1]:
-                    # Let the server know and begin to add the item to the queue (yes the message is being sent back to this Node)
-                    await self.ws.send(create_ws_message(type = "node_add_queue_item", origin = self.node_name, target = self.node_name, data = out['results'][-1]))
+                    print(out)
+
+                    # Take the output and verify it is in the proper format
+                    if 'item' in out['results'][-1]:
+                        # Let the server know and begin to add the item to the queue (yes the message is being sent back to this Node)
+                        await self.ws.send(create_ws_message(type = "node_add_queue_item", origin = self.node_name, target = self.node_name, data = out['results'][-1]))
+                    else:
+                        print_error(f"{self.node_name}: Model output not of desired type.\n\n-- Output --\n{out}\n\nCurrent instruction is being negated.")
+                except:
+                    print_error(f"{self.node_name}: An error occurred while loading LLM. Current instruction is being negated.")
             elif msg['type'] == "node_add_queue_item":
                 # Add item to queue
                 self.agent_task_queue.put(msg['data'])
