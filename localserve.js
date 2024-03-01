@@ -3,6 +3,7 @@ const os = require('os');
 const fs = require('fs');
 const { REST, Client, EmbedBuilder, GatewayIntentBits, ThreadAutoArchiveDuration } = require('discord.js');
 const { exit } = require('process');
+const { botId } = require('./config/global.json')
 
 const PORT = 5002;
 
@@ -16,10 +17,24 @@ try {
 }
 const DISCORD_CHANNEL_ID = '1195786304563195984';
 
-const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent]
+const discordClient = new Client({
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent,]
 });
-client.login(DISCORD_TOKEN);
+discordClient.login(DISCORD_TOKEN);
+
+// Discord channels
+const channel = discordClient.channels.cache.get(DISCORD_CHANNEL_ID);
+
+// ---- DISCORD FUNCTIONS ----
+discordClient.on('ready', () => {
+    console.log(`${discordClient.user.tag} has logged in`);
+})
+discordClient.on('messageCreate', (message) => {
+    // Ignore messages from self
+    if (message.author.id === botId) return;
+    // Listen for messages from bots
+    console.log(message.content);
+})
 
 // Serve the websocket
 const wss = new WebSocket.Server({ port: PORT });
@@ -94,6 +109,7 @@ function parseMessage(unparsed, parsedmessage, ws) {
     }
 }
 
+// ---- WEBSOCKET FUNCTIONS ----
 // Set the timeout options after creating the WebSocket server instance
 wss.on('connection', function connection(ws) {
     print('Client connected');
@@ -111,7 +127,6 @@ wss.on('connection', function connection(ws) {
         // Send discord embed
         const embed = new EmbedBuilder().setColor('#0099ff').setTitle('WebSocket Interaction Received').setDescription(`\n\n**Payload**\n\n> **Originating Device**\n> ${os.hostname()}\n\n> **Interaction Type**\n> ${parsedMessage.type}\n\n> **From**\n> ${parsedMessage.origin}\n\n> **Target**\n> ${parsedMessage.target}\n\n> **Metadata**\n> ${JSON.stringify(parsedMessage.data) !== '{}' ? JSON.stringify(parsedMessage.data) : "Empty"}`).setAuthor({ name: "Corporate America", iconURL: "https://icons.iconarchive.com/icons/elegantthemes/beautiful-flat/256/Computer-icon.png" });
 
-        const channel = client.channels.cache.get(DISCORD_CHANNEL_ID);
         if (channel) {
             channel.send({
                 embeds: [embed]

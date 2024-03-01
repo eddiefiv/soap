@@ -34,6 +34,9 @@
             "mirostat_tau": 5
         }
     },
+    "discord": {
+        "botId": "1195806892023353405"
+    },
     "dev": {
         "debug_mode": false
     }

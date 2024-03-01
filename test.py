@@ -8,11 +8,28 @@ from llama_cpp import Llama
 
 from src.utils.helpers.constants import *
 
-system_prompt = {"role": "system", "content": SYSTEM_PROMPT_OCR_WIN_LINUX}
-
+#system_prompt = {"role": "system", "content": SYSTEM_PROMPT_OCR_WIN_LINUX}
+system_prompt = {"role": "system", "content": "You are a professional emailer, your job is to read over the emails I give you and provide a response given my criteria."}
 messages = [system_prompt]
 
-user_prompt = {"role": "user", "content": "I want to goto the discord main website and take a screenshot of it."}
+d = """
+These are the problems I'm planning to post today, take a look at them and let me know if you think they're ranked properly. I have solutions for them as well if you need it.
+
+Easy:
+https://leetcode.com/problems/concatenation-of-array/submissions/1188846766/
+
+Medium:
+https://www.hackerrank.com/challenges/string-validators/problem?isFullScreen=true
+
+Hard:
+https://leetcode.com/problems/palindrome-number/
+
+Thank you
+
+Can you come up with a short response to this email.
+"""
+
+user_prompt = {"role": "user", "content": d}
 
 messages.append(user_prompt)
 

@@ -10,3 +10,4 @@ llama-cpp-python
 w64devkit
 
 models/*
+*.pyc
