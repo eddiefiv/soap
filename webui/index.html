@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>soap WebUI Portal</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="main-container">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h1>soap WebUI Portal</h1>
+            </div>
+            <div class="chat-subtitle">
+                <h2>Enter a prompt for the Network</h2>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="message-input" placeholder="Prompt for soap Network...">
+                <button class="gradient-button" onclick="sendMessage()" id="send-btn">Send</button>
+            </div>
+            <div class="chat-footer">
+                <h6>The prompt will be sent to the first available Node. All Network activity can be monitored within
+                    <a href="https://discord.com/channels/730254784636125225/1195786304563195984">Discord</a>
+                    .
+                </h6>
+            </div>
+        </div>
+        <div class="button-container">
+            <button id="show-nodes-btn">View available Nodes</button>
+            <button id="show-config-btn">Modify Node config</button>
+        </div>
+
+        <div id="node-modal" class="modal">
+            <!-- Modal content -->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <span class="modal-close">&times;</span>
+                    <h2>Active Nodes</h2>
+                </div>
+                <div class="modal-body">
+                    <p>Active nodes will show here</p>
+                </div>
+                <div class="modal-footer">
+                    <h5>Work in Progress...</h5>
+                </div>
+            </div>
+        </div>
+        <div id="config-modal" class="modal">
+            <!-- Modal content -->
+            <div class="modal-content">
+                <div class="modal-header">
+                    <span class="modal-close">&times;</span>
+                    <h2>Modify Node configurations</h2>
+                    <p class="light small" id="config-load-status">Could not load from save</p>
+                </div>
+                <div class="modal-body config-body" id="config-body">
+                    <div class="cfg-heading">
+                        <h2 class="cfg-title">General Configurations</h2>
+                    </div>
+                    <div class="cfg-container">
+                        <div class="cfg-title-container">
+                            <h5 class="cfg-title">Agent Count</h5>
+                            <span class="cfg-slider-count" id="agent-counter">2</span>
+                        </div>
+                        <div class="slider-container">
+                            <input type="range" min="1" max="5" value="2" class="cfg-slider" id="agent-slider">
+                        </div>
+                    </div>
+                    <div class="cfg-container">
+                        <div class="cfg-title-container">
+                            <h5 class="cfg-title tooltip">Worker Count<span class="tooltip-text">How many Workers to be
+                                    assigned to each Agent.</span></h5>
+                            <span class="cfg-slider-count" id="worker-counter">3</span>
+                        </div>
+                        <div class="slider-container">
+                            <input type="range" min="1" max="10" value="3" class="cfg-slider" id="worker-slider">
+                        </div>
+                    </div>
+                    <div class="cfg-heading">
+                        <h2 class="cfg-title">Model Configurations</h2>
+                    </div>
+                    <div class="cfg-container">
+                        <div class="cfg-title-container">
+                            <h5 class="cfg-title tooltip">Worker Count<span class="tooltip-text">How many Workers to be
+                                    assigned to each Agent.</span></h5>
+                            <span class="cfg-slider-count" id="worker-counter">3</span>
+                        </div>
+                        <div class="slider-container">
+                            <input type="range" min="1" max="10" value="3" class="cfg-slider" id="worker-slider">
+                        </div>
+                    </div>
+                    <div class="cfg-heading">
+                        <h2 class="cfg-title">Model Hyperparameters</h2>
+                    </div>
+                    <div class="inline-cfg-wrapper">
+                        <div class="cfg-container no-width">
+                            <div class="cfg-title-container">
+                                <h5 class="cfg-title">Temperature</h5>
+                            </div>
+                            <div class="input-container">
+                                <input type="number" min="0.01" max="1.0" value="0.7" class="cfg-number-input"
+                                    id="temp-input" onchange="onInputChanged(this)">
+                            </div>
+                        </div>
+                        <div class="cfg-container no-width">
+                            <div class="cfg-title-container">
+                                <h5 class="cfg-title">Top P</h5>
+                            </div>
+                            <div class="input-container">
+                                <input type="number" min="0.01" max="1.0" value="0.92" class="cfg-number-input"
+                                    id="top_p-input" onchange="onInputChanged(this)">
+                            </div>
+                        </div>
+                        <div class="cfg-container no-width">
+                            <div class="cfg-title-container">
+                                <h5 class="cfg-title">Min P</h5>
+                            </div>
+                            <div class="input-container">
+                                <input type="number" min="0.01" max="1.0" value="0.05" class="cfg-number-input"
+                                    id="min_p-input" onchange="onInputChanged(this)">
+                            </div>
+                        </div>
+                        <div class="cfg-container no-width">
+                            <div class="cfg-title-container">
+                                <h5 class="cfg-title">Max Tokens</h5>
+                            </div>
+                            <div class="input-container">
+                                <input type="number" min="128" max="8192" value="3000" class="cfg-number-input"
+                                    id="max_token-input" onchange="onInputChanged(this)">
+                            </div>
+                        </div>
+                        <div class="cfg-container no-width">
+                            <div class="cfg-title-container">
+                                <h5 class="cfg-title">Repeat Penalty</h5>
+                            </div>
+                            <div class="input-container">
+                                <input type="number" min="0.01" max="10" value="1.1" class="cfg-number-input"
+                                    id="repeat_penalty-input" onchange="onInputChanged(this)">
+                            </div>
+                        </div>
+                        <div class="cfg-container no-width">
+                            <div class="cfg-title-container">
+                                <h5 class="cfg-title">Presence Penalty</h5>
+                            </div>
+                            <div class="input-container">
+                                <input type="number" min="0.01" max="100" value="1.0" class="cfg-number-input"
+                                    id="presence_penalty-input" onchange="onInputChanged(this)">
+                            </div>
+                        </div>
+                        <div class="cfg-container no-width">
+                            <div class="cfg-title-container">
+                                <h5 class="cfg-title">Top K</h5>
+                            </div>
+                            <div class="input-container">
+                                <input type="number" min="1" max="1000" value="100" class="cfg-number-input"
+                                    id="top_k-input" onchange="onInputChanged(this)">
+                            </div>
+                        </div>
+                        <div class="cfg-container no-width">
+                            <div class="cfg-title-container">
+                                <h5 class="cfg-title">Microstat eta</h5>
+                            </div>
+                            <div class="input-container">
+                                <input type="number" min="0.01" max="1.0" value="0.1" class="cfg-number-input"
+                                    id="meta-input" onchange="onInputChanged(this)">
+                            </div>
+                        </div>
+                        <div class="cfg-container no-width">
+                            <div class="cfg-title-container">
+                                <h5 class="cfg-title">Microstat tau</h5>
+                            </div>
+                            <div class="input-container">
+                                <input type="number" min="1" max="100" value="5" class="cfg-number-input"
+                                    id="mtau-input" onchange="onInputChanged(this)">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer no-bg">
+                    <button class="gradient-button" id="submit-configs">Submit changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="metrics-container">
+        <h3>System Metrics</h3>
+        <p class="metrics-none" id="metrics-none1" style="display:none">No available metrics</p>
+        <table class="metrics-table" id="metrics-table1">
+            <tr>
+                <td>Hostname</td>
+                <td class="hostname-value table-value">HOSTNAME</td>
+            </tr>
+            <tr>
+                <td>OS</td>
+                <td class="os-value table-value">OPERATING_SYSTEM</td>
+            </tr>
+            <tr>
+                <td>Version</td>
+                <td class="version-value table-value">OS_VERSION</td>
+            </tr>
+            <tr>
+                <td>Machine</td>
+                <td class="machine-value table-value">MACHINE</td>
+            </tr>
+            <tr>
+                <td>Processor</td>
+                <td class="processor-value table-value">PROCESSOR</td>
+            </tr>
+            <tr>
+                <td>Total Virtual Memory</td>
+                <td class="tvm-value table-value">TVM</td>
+            </tr>
+            <tr>
+                <td>CPU Count</td>
+                <td class="cpu-value table-value">CORES</td>
+            </tr>
+        </table>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>

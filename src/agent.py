@@ -6,7 +6,6 @@ import websockets
 import jsonpickle
 import multiprocessing
 import time
-import llama_cpp
 
 from urllib import parse
 
@@ -15,7 +14,7 @@ from multiprocessing import Queue
 
 from utils.helpers.agent_helpers import get_inference_config, validate_endpoint
 from utils.helpers.worker_helpers import *
-from utils.helpers.all_helpers import create_ws_message
+from utils.helpers.all_helpers import create_ws_message, load_model, inference_model
 from utils.helpers.constants import *
 
 from utils.console import *
@@ -37,6 +36,9 @@ class Agent():
 
         # Set the global config sent from the node
         self.global_config = global_config
+
+        # Update consoles debug mode
+        set_debug_mode(global_config['dev']['debug_mode'])
 
         self._parent_node_name = parent_node_name
 
@@ -247,19 +249,28 @@ class Agent():
 
         #assert self.is_valid, "No valid endpoint provided, please update the endpoint using .update_endpoint() and then .reload_agent()"
 
-        _prompt = "\n### Instruct: \n".join([prompt])
+        # Inference model and split up the selected task from node into smaller pieces for workers
+        model = load_model(os.path.join(MODELS_DIRECTORY, self.global_config['llama_cpp_settings']['agent']['filepath']))
+        out = inference_model(
+            model = model,
+            chat_format = CHAT_ML_PROMPT_FORMAT,
+            system_message = SYSTEM_PROMPT_WIN_LINUX_AGENT,
+            user_message = prompt,
+            hyperparams = self.global_config['llama_cpp_settings']['hyperparams']
+        )
+        if out is not None:
+            out = json.loads(out)
+        else:
+            print_error(f"{self.agent_name} returned None during inference. No output from model was received.")
+
+        # Reconstruct the instruction after inferencing
+        task = out['item']['instruction_set']
         task = reconstruct_multi_instruction(task)
         self.task_queue.put(task)
 
         # Unidle all workers that were previously idle
         for worker in self.get_idle_workers():
             await self.ws.send(create_ws_message(type = "worker_dequeue", origin = self.agent_name, target = worker['name']))
-
-        # TODO
-        # if self._uses_inference_endpoint:
-        #     _r = self._post(path = "api/v1/generate", body = self._gen_body(_prompt))
-
-        #     return _r
 
     def update_endpoint(self, new_endpoint: str):
         '''Updates the :class:`Agent`'s endpoint with a new one

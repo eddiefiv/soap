@@ -1,16 +1,18 @@
 const WebSocket = require('ws');
+const express = require('express');
 const os = require('os');
 const fs = require('fs');
 const { REST, Client, EmbedBuilder, GatewayIntentBits, ThreadAutoArchiveDuration } = require('discord.js');
 const { exit } = require('process');
-const { botId } = require('./config/global.json')
+const { botID } = require('./config/BOT_ID.json')
 
-const PORT = 5002;
+const PORT = 5001;
+const WEBUI_PORT = 5000;
 
 // Try to grab the token from the file
 let DISCORD_TOKEN = null
 try {
-    DISCORD_TOKEN = fs.readFileSync('disctoken.txt', 'utf8').trim();
+    DISCORD_TOKEN = fs.readFileSync('./config/disctoken.txt', 'utf8').trim();
 } catch {
     print("No token file found. Exiting.")
     exit(0);
@@ -27,14 +29,64 @@ const channel = discordClient.channels.cache.get(DISCORD_CHANNEL_ID);
 
 // ---- DISCORD FUNCTIONS ----
 discordClient.on('ready', () => {
-    console.log(`${discordClient.user.tag} has logged in`);
+    print(`${discordClient.user.tag} has logged in`);
 })
 discordClient.on('messageCreate', (message) => {
     // Ignore messages from self
-    if (message.author.id === botId) return;
+    if (message.author.id === botID) return;
     // Listen for messages from bots
-    console.log(message.content);
+    print(message.content);
 })
+
+
+// Serve the webui
+const app = express();
+
+app.use(express.json());
+app.use(express.static(__dirname + "/webui/"))
+app.get("/", function (req, res) {
+    res.sendFile(__dirname + "/webui/index.html");
+});
+app.get("/node-metrics", function (req, res) {
+    try {
+        res.sendFile(__dirname + "/config/node_metrics.json");
+    } catch {
+        res.end("No node_metrics.json found.");
+    }
+});
+app.get("/config", function (req, res) {
+    // First try to find autogen
+    if (doesFileExist(__dirname + "/config/autogen.json")) {
+        var autogenData = JSON.parse(fs.readFileSync(__dirname + "/config/autogen.json"));
+        var autogenConfigDirectory = autogenData['last_config_filepath'];
+
+        // Check to see if the config found in autogen exists, if so, send it
+        if (doesFileExist(autogenConfigDirectory)) {
+            res.sendFile(autogenConfigDirectory);
+        }
+        // Check if default config exists
+    } else if (doesFileExist(__dirname + "/config/config.json")) {
+        res.sendFile(__dirname + "/config/config.json");
+    }
+});
+app.post("/prompt", function (req, res) {
+    // If a prompt was received, send t
+    print(JSON.stringify(req.body));
+});
+
+// 404 handling
+app.use((req, res) => {
+    res.end("404");
+});
+
+app.listen(WEBUI_PORT, function () {
+    print(`============ WebUI and API Gateway is open on port ${WEBUI_PORT} ============`);
+});
+
+function doesFileExist(filepath) {
+    if (fs.existsSync(filepath)) { return true; }
+    return false;
+}
 
 // Serve the websocket
 const wss = new WebSocket.Server({ port: PORT });
@@ -146,7 +198,5 @@ wss.on('connection', function connection(ws) {
 });
 
 wss.on('listening', function () {
-    print(`WebSocket server is listening on port ${PORT}`);
+    print(`WebSocket server is listening on localhost port ${PORT}`);
 });
-
-print(`Starting WebSocket server on port ${PORT}...`);

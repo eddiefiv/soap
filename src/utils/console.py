@@ -14,20 +14,11 @@ from rich.style import StyleType
 
 console = Console()
 
-# Get the directory of the script being executed
-current_directory = os.path.dirname(os.path.abspath(__file__))
+debug_mode = False
 
-# Navigate to the parent directory (Corporate America) relative to the script's directory
-parent_directory = os.path.abspath(os.path.join(current_directory, os.pardir, os.pardir))
-
-# Navigate to the config directory relative to the script's directory
-config_directory = os.path.join(parent_directory, 'config')
-
-# Path to the node_metrics.json file relative to the script's directory
-node_metrics_file_path = os.path.join(config_directory, 'node_metrics.json')
-
-# Path to the global.jsoon file relative to the script's directory
-global_config_file_path = os.path.join(config_directory, 'global.json')
+def set_debug_mode(debug: bool):
+    global debug_mode
+    debug_mode = debug
 
 def print_markdown(text):
     """Prints a rich info message. Support Markdown syntax."""
@@ -35,13 +26,11 @@ def print_markdown(text):
     md = Padding(Markdown(text), 2)
     console.print(md)
 
-
 def print_step(text, justification='left', style =""):
     """Prints a rich info message."""
 
     panel = Panel(Text(text, justify=justification), style=style)
     console.print(panel)
-
 
 def print_table(title, items: list, columns: list, color="yellow"):
     """Prints items in a table."""
@@ -56,7 +45,6 @@ def print_table(title, items: list, columns: list, color="yellow"):
 
     console.print(table)
 
-
 def make_table(title, items: list, columns: list, color="yellow"):
     """Prints items in a table."""
 
@@ -69,7 +57,6 @@ def make_table(title, items: list, columns: list, color="yellow"):
         table.add_row(*item, style = "blue3")
 
     return
-
 
 def print_substep(text, style=""):
     """Prints a rich info message without the panelling."""
@@ -88,29 +75,8 @@ def print_error(text):
     print_substep(text = f"ERROR: {text}", style = "red1")
 
 def print_debug(text):
-    if global_config['dev']['debug_mode']:
+    if debug_mode:
         print_substep(text = f"DEBUG: {text}", style = "dark_green")
-
-try:
-    with open(global_config_file_path, 'r') as f:
-        _r = f.read()
-        global_config = json.loads(_r)
-except Exception as e:
-    print_error(text = f"Console couldnt load and set configs from config.json, resorting to default configs. {e}")
-    global_config = {
-        "general": {
-            "agent_count": 2,
-            "worker_count": 3
-        },
-        "models": {
-            "70b_filepath": None,
-            "13b_filepath": None,
-            "7b_filepath": None
-        },
-        "dev": {
-            "debug_mode": False
-        }
-    }
 
 def handle_input(
     message: str = "",

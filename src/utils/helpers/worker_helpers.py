@@ -30,6 +30,6 @@ def reconstruct_single_instruction(instruction_repr):
     return SingleInstruction(task = WorkerTask[instruction_repr['operation'].upper()], action = instruction_repr['action'])
 
 def reconstruct_multi_instruction(instruction_repr):
-    instructions = [instruction for instruction in instruction_repr['item']['instruction_set']]
+    instructions = [instruction for instruction in instruction_repr]
     instructions = [reconstruct_single_instruction(instruction) for instruction in instructions]
     return MultiInstruction(instructions = instructions)

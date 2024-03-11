@@ -38,67 +38,32 @@ class Node():
 
     def set_metrics_config(self):
         d = {
-            node(): {
-                "system": system(),
-                "version": version(),
-                "machine": machine(),
-                "processor": processor(),
-                "hostname": gethostname(),
-                "total_virtual_memory": round(virtual_memory().total / (1024.0 **3), 2),
-                "cpu_count": cpu_count()
-            }
+            "system": system(),
+            "version": version(),
+            "machine": machine(),
+            "processor": processor(),
+            "hostname": gethostname(),
+            "total_virtual_memory": round(virtual_memory().total / (1024.0 **3), 2),
+            "cpu_count": cpu_count()
         }
 
-        # Get the directory of the script being executed
-        current_directory = os.path.dirname(os.path.abspath(__file__))
+        NODE_METRICS_DIRECTORY = os.path.join(CONFIG_DIRECTORY, "node_metrics.json")
 
-        # Navigate to the parent directory (Corporate America) relative to the script's directory
-        parent_directory = os.path.abspath(os.path.join(current_directory, os.pardir))
-
-        # Navigate to the config directory relative to the script's directory
-        config_directory = os.path.join(parent_directory, 'config')
-
-        # Path to the node_metrics.json file relative to the script's directory
-        node_metrics_file_path = os.path.join(config_directory, 'node_metrics.json')
-
-        # Path to the global.jsoon file relative to the script's directory
-        global_config_file_path = os.path.join(config_directory, 'global.json')
-
-        # Path to the models folder where all local models are stored
-        models_folder_path = os.path.join(parent_directory, 'models')
-
+        # Attempt to update the metrics config
         try:
-            print_debug(node_metrics_file_path)
-            with open(node_metrics_file_path, "w") as f:
+            print_debug(NODE_METRICS_DIRECTORY)
+            with open(NODE_METRICS_DIRECTORY, "w") as f:
                 f.write(json.dumps(d, indent = 4))
             print_success("Node metrics file up to date.")
         except Exception as e:
             print_warning(text = f"Node couldnt update metrics config. Directory may not exist.")
 
-        try:
-            with open(global_config_file_path, 'r') as f:
-                _r = f.read()
-                self.global_config = json.loads(_r)
+    def set_main_config(self, config = None):
+        """Sets the :class:`Node`'s config and updates console with debug mode"""
+        self.global_config = config
 
-                # Set the model folder location in the config
-                self.global_config['models_folderpath'] = models_folder_path
-            print_success("Global configs successfully loaded.")
-        except Exception as e:
-            print_error(text = f"Node couldnt load and set configs from config.json, resorting to default configs.")
-            self.global_config = {
-                "general": {
-                    "agent_count": 2,
-                    "worker_count": 3
-                },
-                "models": {
-                    "70b_filepath": None,
-                    "13b_filepath": None,
-                    "7b_filepath": None
-                },
-                "dev": {
-                    "debug_mode": True
-                }
-            }
+        # Set consoles debug mode
+        set_debug_mode(config['dev']['debug_mode'])
 
     async def listen(self):
         '''Begin listening to the localhost WebSocket'''
@@ -129,17 +94,20 @@ class Node():
 
                 # Parse and send the prompt to the model to be inferenced
                 try:
-                    model = load_model(os.path.join(self.global_config['models_folderpath'], self.global_config['llama_cpp_settings']['7b']['filepath']))
-                    out = inference_model(model, CHAT_ML_PROMPT_FORMAT, SYSTEM_PROMPT_OCR_WIN_LINUX, ins, self.global_config['llama_cpp_settings']['hyperparams'])
+                    model = load_model(os.path.join(MODELS_DIRECTORY, self.global_config['llama_cpp_settings']['node']['filepath']))
+                    out = inference_model(model, CHAT_ML_PROMPT_FORMAT, SYSTEM_PROMPT_WIN_LINUX_NODE, ins, self.global_config['llama_cpp_settings']['hyperparams'])
                     if out is not None:
                         out = json.loads(out)
+                    else:
+                        print_error(f"{self.node_name} returned None during inference. No output from model was recevied.")
 
-                    print(out)
+                    print_debug(out)
 
                     # Take the output and verify it is in the proper format
-                    if 'item' in out['results'][-1]:
-                        # Let the server know and begin to add the item to the queue (yes the message is being sent back to this Node)
-                        await self.ws.send(create_ws_message(type = "node_add_queue_item", origin = self.node_name, target = self.node_name, data = out['results'][-1]))
+                    if 'item' in out:
+                        # Go over each instruction and add it to the Agent Task Queue
+                        for instruction in out['item']['instruction_set']:
+                            self.agent_task_queue.put(instruction['action'])
                     else:
                         print_error(f"{self.node_name}: Model output not of desired type.\n\n-- Output --\n{out}\n\nCurrent instruction is being negated.")
                 except:
