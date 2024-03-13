@@ -45,8 +45,8 @@ CONFIG_FILE_DEFAULT_CONTENTS = {
             "repeat_penalty": 1.1,
             "presence_penalty": 1.0,
             "top_k": 100,
-            "mirostat_eta": 0.1,
-            "mirostat_tau": 5
+            "microstat_eta": 0.1,
+            "microstat_tau": 5
         }
     }
 }

@@ -69,8 +69,8 @@ def sync_keep_alive(awaitable, new_loop):
         asyncio.run_coroutine_threadsafe(awaitable(), asyncio.get_running_loop())
 
 async def keep_alive():
-    print_substep("SYSTEM: Starting Keep Alive thread on ws://localhost:5002", style = "bright_blue")
-    async with websockets.connect("ws://localhost:5002") as ws:
+    print_substep("SYSTEM: Starting Keep Alive thread on ws://localhost:5001", style = "bright_blue")
+    async with websockets.connect("ws://localhost:5001") as ws:
         while True:
             await ws.send(create_ws_message(type = "ping", origin = "entry_script", target = "any_agent"))
             _r = await ws.recv()
@@ -78,8 +78,8 @@ async def keep_alive():
             time.sleep(10)
 
 async def listen_localhost():
-    print_substep("SYSTEM: Starting listening process on ws://localhost:5002", style = "bright_blue")
-    async with websockets.connect("ws://localhost:5002", ping_timeout = None) as ws:
+    print_substep("SYSTEM: Starting listening process on ws://localhost:5001", style = "bright_blue")
+    async with websockets.connect("ws://localhost:5001", ping_timeout = None) as ws:
         await agent_deployer(ws)
         while True:
             # Receive a message from the server
@@ -99,7 +99,7 @@ async def agent_deployer(ws): # TODO: Notify the agent when a worker is complete
 async def is_localhost_served():
     try:
         print_debug("Checking for localhost serve status")
-        ws = await websockets.connect("ws://localhost:5002")
+        ws = await websockets.connect("ws://localhost:5001")
         await ws.close()
         return True
     except Exception as e:

@@ -58,7 +58,7 @@ class Agent():
         '''Starts the :class:`Agent` and beings listening for instruction on the localhost server.
         Wont be able to send messages to the websocket server without having received a message first that prompts a sent message.
         Must be ran in order to give tasks to :class:`Worker`'s'''
-        async with websockets.connect("ws://localhost:5002") as ws:
+        async with websockets.connect("ws://localhost:5001") as ws:
             self.ws = ws
             #hb = threading.Thread(target = self.sync_heartbeat, args = (ws, 2)) # Start the heartbeating thread to keep this connection alive
             #hb.start()

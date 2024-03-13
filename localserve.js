@@ -1,13 +1,24 @@
+// Constants
 const WebSocket = require('ws');
 const express = require('express');
 const os = require('os');
 const fs = require('fs');
-const { REST, Client, EmbedBuilder, GatewayIntentBits, ThreadAutoArchiveDuration } = require('discord.js');
+const { Client, EmbedBuilder, GatewayIntentBits } = require('discord.js');
 const { exit } = require('process');
 const { botID } = require('./config/BOT_ID.json')
 
 const PORT = 5001;
 const WEBUI_PORT = 5000;
+
+const NodeStatus = {
+    ACTIVE: "active",
+    INACTIVE: "inactive",
+    WORKING: "working",
+    OFFLINE: "offline"
+}
+
+// Other vars
+var nodeStatus = NodeStatus.OFFLINE;
 
 // Try to grab the token from the file
 let DISCORD_TOKEN = null
@@ -47,11 +58,17 @@ app.use(express.static(__dirname + "/webui/"))
 app.get("/", function (req, res) {
     res.sendFile(__dirname + "/webui/index.html");
 });
+app.get("/ping", function (req, res) {
+    res.end(JSON.stringify({ "success": true, "msg": "pong" }));
+})
+app.get("/node-status", function (req, res) {
+    res.end(JSON.stringify({ "success": true, "msg": { "nodeStatus": nodeStatus } }))
+})
 app.get("/node-metrics", function (req, res) {
-    try {
+    if (doesFileExist(__dirname + "/config/node_metrics.json")) {
         res.sendFile(__dirname + "/config/node_metrics.json");
-    } catch {
-        res.end("No node_metrics.json found.");
+    } else {
+        res.end(JSON.stringify({ "success": false, "msg": "no metrics file" }));
     }
 });
 app.get("/config", function (req, res) {
@@ -67,11 +84,57 @@ app.get("/config", function (req, res) {
         // Check if default config exists
     } else if (doesFileExist(__dirname + "/config/config.json")) {
         res.sendFile(__dirname + "/config/config.json");
+    } else {
+        res.end(JSON.stringify({ "success": false, "msg": "no config file" }));
     }
 });
 app.post("/prompt", function (req, res) {
-    // If a prompt was received, send t
-    print(JSON.stringify(req.body));
+    const body = JSON.stringify(req.body); // DOES NOT WORK LIKE JSON OBJECT, CANNOT body[item]!!!!
+    // If a prompt was received, send to discord to be picked up by a node
+    sendToDiscord({ 'type': 'WebUI Prompt', origin: 'WebUI | ' + os.hostname(), target: 'GCP soap Server', data: body });
+
+    // Send the prompt to gcp
+    GCPws.send(createWsMessage(type = 'webuiPrompt', origin = os.hostname(), target = 'GCP soap Server', data = { "prompt": req.body['content'] }))
+});
+app.post("/config", function (req, res) {
+    // Write to the config
+    // First try to find autogen
+    if (doesFileExist(__dirname + "/config/autogen.json")) {
+        var autogenData = JSON.parse(fs.readFileSync(__dirname + "/config/autogen.json"));
+        var autogenConfigDirectory = autogenData['last_config_filepath'];
+
+        // Check to see if the config found in autogen exists, if so, write to it
+        if (doesFileExist(autogenConfigDirectory)) {
+            fs.writeFile(autogenConfigDirectory, JSON.stringify(req.body, null, "\t"), (err) => {
+                if (err) throw err;
+                print("Config updated from API");
+            });
+        }
+        // Check if default config exists
+    } else if (doesFileExist(__dirname + "/config/config.json")) {
+        fs.writeFile(__dirname + "/config/config.json", JSON.stringify(req.body, null, "\t"), (err) => {
+            if (err) throw err;
+            print("Config updated from API");
+        });
+    } else {
+        res.end(JSON.stringify({ "success": false, "msg": "no config file" }));
+    }
+});
+app.post("/node-status", function (req, res) {
+    // Node is ready for functioning
+    if (req.body['status'] === "active") {
+        nodeStatus = NodeStatus.ACTIVE;
+        res.end();
+    } else if (req.body['status'] === "working") {
+        nodeStatus = NodeStatus.WORKING;
+        res.end();
+    } else {
+        nodeStatus = NodeStatus.INACTIVE;
+        res.end();
+    }
+
+    // Let gcp know of a new node status so it can update records accordingly
+    GCPws.send(createWsMessage(type = 'nodeStatusUpdate', origin = os.hostname(), target = "GCP soap Server", data = { "status": nodeStatus }));
 });
 
 // 404 handling
@@ -115,6 +178,17 @@ function sendToAll(message, sender, exceptSender) {
             }
         });
     }
+}
+
+function sendToDiscord(content) {
+    const chn = discordClient.channels.fetch("1195786304563195984");
+    // Send discord embed
+    const embed = new EmbedBuilder().setColor('#0099ff').setTitle('GCP soap Server Interaction').setDescription(`\n\n**Payload**\n\n> **Originating Device**\n> ${content['origin']}\n\n> **Interaction Type**\n> ${content['type']}\n\n> **From**\n> ${content['origin']}\n\n> **Target**\n> ${content['target']}\n\n> **Metadata**\n> ${content['metadata']}`).setAuthor({ name: os.hostname(), iconURL: "https://icons.iconarchive.com/icons/elegantthemes/beautiful-flat/256/Computer-icon.png" });
+
+    chn.then(channel => channel.send(({
+        embeds: [embed]
+    })))
+        .catch(console.error);
 }
 
 function parseMessage(unparsed, parsedmessage, ws) {
@@ -161,7 +235,7 @@ function parseMessage(unparsed, parsedmessage, ws) {
     }
 }
 
-// ---- WEBSOCKET FUNCTIONS ----
+// ---- LOCALHOST WEBSOCKET FUNCTIONS ----
 // Set the timeout options after creating the WebSocket server instance
 wss.on('connection', function connection(ws) {
     print('Client connected');
@@ -200,3 +274,31 @@ wss.on('connection', function connection(ws) {
 wss.on('listening', function () {
     print(`WebSocket server is listening on localhost port ${PORT}`);
 });
+
+// ---- GCP WEBSOCKET CLIENT ----
+const GCPws = new WebSocket("ws://34.42.227.43:8080");
+
+GCPws.on('open', function () {
+    GCPws.send(createWsMessage(type = "serverConnect", origin = os.hostname(), target = "GCP soap Server", data = { "hostname": os.hostname() }));
+});
+GCPws.on('error', function () {
+    console.log("Error during interaction with GCP WebSocket. Could be fatal.")
+});
+GCPws.on('message', function (message) {
+    const parsedMessage = JSON.parse(message);
+
+    switch (parsedMessage['type']) {
+        case 'node_status_check':
+            GCPws.send(createWsMessage(type = 'node_status_res', origin = os.hostname(), target = "GCP soap Server", data = { "nodeStatus": nodeStatus }));
+            break;
+        case 'new_instruction':
+            console.log(parsedMessage);
+            const inst = { instruction: parsedMessage['data']['instruction'] };
+            const comp = { type: 'new_instruction', origin: os.hostname(), target: "any_node", data: inst };
+            console.log("TESTING: " + JSON.stringify(comp));
+            sendToAll(comp, null, false);
+            break;
+        default:
+            print(`Unknown message type: ${parsedMessage['type']}`)
+    }
+})

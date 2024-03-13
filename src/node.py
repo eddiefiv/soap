@@ -1,10 +1,9 @@
 import json
 import jsonpickle
 import websockets
-import asyncio
 import multiprocessing
-import time
 import os
+import requests
 
 from multiprocessing import Queue
 
@@ -14,9 +13,11 @@ from utils.helpers.constants import *
 from utils.helpers.all_helpers import create_ws_message, load_model, inference_model
 from utils.console import *
 
-from platform import system, node, version, machine, processor
+from platform import system, version, machine, processor
 from socket import gethostname
 from psutil import virtual_memory, cpu_count
+
+endpoint = "http://localhost:5000"
 
 class Node():
     '''Defines a single device that can either be an agentless server, or a client with `n` agents.
@@ -67,10 +68,16 @@ class Node():
 
     async def listen(self):
         '''Begin listening to the localhost WebSocket'''
-        async with websockets.connect("ws://localhost:5002") as ws:
+        async with websockets.connect("ws://localhost:5001") as ws:
             self.ws = ws
             print_step(f"Node on {gethostname()} started!", justification = "center", style = "green1")
             self.ready = True
+
+            # Let the localhost know this Node is ready
+            try:
+                requests.post(f"{endpoint}/node-status", data = json.dumps({"status": "active"}), headers = {'Content-Type': 'application/json'})
+            except:
+                print_error("Could not contact backend to update Node status. This may warrant a complete Node restart.")
 
             while True:
                 res = await ws.recv()
@@ -78,9 +85,28 @@ class Node():
                 #print_debug(f"{self.node_name}: {res}")
                 await self._parse(res) # TODO: Create new process on each parse. Processes will autokill after completion, no need to .join()
 
-    async def inference(self):
+    async def inference(self, chat_format, sys_prompt, prompt):
         '''Inferences the LLM with the main prompt that is then to be split up into tasks amongst the :class:`Agent`'s'''
-        pass
+        # Parse and send the prompt to the model to be inferenced
+        try:
+            model = load_model(os.path.join(MODELS_DIRECTORY, self.global_config['llama_cpp_settings']['node']['filepath']))
+            out = inference_model(model, chat_format, sys_prompt, prompt, self.global_config['llama_cpp_settings']['hyperparams'])
+            if out is not None:
+                out = json.loads(out)
+            else:
+                print_error(f"{self.node_name} returned None during inference. No output from model was recevied.")
+
+            print_debug(out)
+
+            # Take the output and verify it is in the proper format
+            if 'item' in out:
+                # Go over each instruction and add it to the Agent Task Queue
+                for instruction in out['item']['instruction_set']:
+                    self.agent_task_queue.put(instruction['action'])
+            else:
+                print_error(f"{self.node_name}: Model output not of desired type.\n\n-- Output --\n{out}\n\nCurrent instruction is being negated.")
+        except:
+            print_error(f"{self.node_name}: An error occurred while loading LLM. Current instruction is being negated.")
 
     async def _parse(self, msg):
         if msg['target'] == self.node_name or msg['target'] == "any_node":
@@ -89,29 +115,14 @@ class Node():
                     _params = msg['data']['params']
                     await self.attach_agent(uses_inference_endpoint = _params['uses_inference_endpoint'], inference_endpoint = _params['inference_endpoint'], uid = jsonpickle.decode(_params['uid']))
             elif msg['type'] == "new_instruction":
+                print_success("This node has been selected for work!")
+                # Let localhost know this Node is working
+                requests.post(f"{endpoint}/node-status", data = json.dumps({"status": "working"}), headers = {'Content-Type': 'application/json'})
                 # Inference the incoming instruction and parse it down into smaller bits to then be added to the Agent Task Queue
+                print_error(msg)
                 ins = msg['data']['instruction']
 
-                # Parse and send the prompt to the model to be inferenced
-                try:
-                    model = load_model(os.path.join(MODELS_DIRECTORY, self.global_config['llama_cpp_settings']['node']['filepath']))
-                    out = inference_model(model, CHAT_ML_PROMPT_FORMAT, SYSTEM_PROMPT_WIN_LINUX_NODE, ins, self.global_config['llama_cpp_settings']['hyperparams'])
-                    if out is not None:
-                        out = json.loads(out)
-                    else:
-                        print_error(f"{self.node_name} returned None during inference. No output from model was recevied.")
-
-                    print_debug(out)
-
-                    # Take the output and verify it is in the proper format
-                    if 'item' in out:
-                        # Go over each instruction and add it to the Agent Task Queue
-                        for instruction in out['item']['instruction_set']:
-                            self.agent_task_queue.put(instruction['action'])
-                    else:
-                        print_error(f"{self.node_name}: Model output not of desired type.\n\n-- Output --\n{out}\n\nCurrent instruction is being negated.")
-                except:
-                    print_error(f"{self.node_name}: An error occurred while loading LLM. Current instruction is being negated.")
+                await self.inference(CHAT_ML_PROMPT_FORMAT, SYSTEM_PROMPT_WIN_LINUX_NODE, ins)
             elif msg['type'] == "node_add_queue_item":
                 # Add item to queue
                 self.agent_task_queue.put(msg['data'])
@@ -153,7 +164,7 @@ class Node():
         for agent in self.agents:
             if agent['state'] == AgentState.RECV.value:
                 _recv_agents.append(agent)
-        print(_recv_agents)
+        print_debug(_recv_agents)
         return _recv_agents
 
     def find_agent_idx_from_name(self, name):

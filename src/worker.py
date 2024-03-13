@@ -52,7 +52,7 @@ class Worker():
         # Initialize first
         await self.init()
 
-        async with websockets.connect("ws://localhost:5002", ping_timeout = None) as ws:
+        async with websockets.connect("ws://localhost:5001", ping_timeout = None) as ws:
             self.ws = ws
             print_substep(f"{self.worker_name}: Connected and awaiting instruction from Agent or External source...", style = "bright_blue")
 

@@ -50,7 +50,7 @@ llm = Llama(
 #llm.tokenize(bytes(messages))
 
 output = llm.create_completion(
-    prompt = CHAT_ML_PROMPT_FORMAT(SYSTEM_PROMPT_OCR_WIN_LINUX, "I want to make a discord bot to run on my machine. It should have 2 slash commands: mainMenu and settingsMenu. Both menus should display a simple embed and 1 red button for deleting the message (closing out the menu)."),
+    prompt = CHAT_ML_PROMPT_FORMAT(SYSTEM_PROMPT_WIN_LINUX_NODE, "I want to make a discord bot to run on my machine. It should have 2 slash commands: mainMenu and settingsMenu. Both menus should display a simple embed and 1 red button for deleting the message (closing out the menu)."),
     temperature = 0.7,
     max_tokens = 16000,
     top_p = 0.92,

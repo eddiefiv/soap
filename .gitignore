@@ -3,8 +3,12 @@
 *.png
 
 disctoken.txt
+
+gcpserver.js
+
 autogen.json
 config.json
+node_metrics.json
 
 node_modules
 venv

@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -18,8 +17,8 @@
                 <h2>Enter a prompt for the Network</h2>
             </div>
             <div class="chat-input">
-                <input type="text" id="message-input" placeholder="Prompt for soap Network...">
-                <button class="gradient-button" onclick="sendMessage()" id="send-btn">Send</button>
+                <input type="text" id="message-input" placeholder="Validating localhost connection..." disabled>
+                <button class="gradient-button" onclick="sendMessage()" id="send-btn" disabled>Send</button>
             </div>
             <div class="chat-footer">
                 <h6>The prompt will be sent to the first available Node. All Network activity can be monitored within
@@ -31,6 +30,47 @@
         <div class="button-container">
             <button id="show-nodes-btn">View available Nodes</button>
             <button id="show-config-btn">Modify Node config</button>
+        </div>
+        <div class="button-container small-margin flex-center flex-column">
+            <div class="container-subheader">
+                <h3>Toggle local Node status</h3>
+            </div>
+            <button class="status-btn" id="node-status-btn" disabled>Checking Node status...</button>
+        </div>
+
+        <div class="metrics-container">
+            <h3>System Metrics</h3>
+            <p class="metrics-none" id="metrics-none1" style="display:none">No available metrics</p>
+            <table class="metrics-table" id="metrics-table1">
+                <tr>
+                    <td>Hostname</td>
+                    <td class="hostname-value table-value">HOSTNAME</td>
+                </tr>
+                <tr>
+                    <td>OS</td>
+                    <td class="os-value table-value">OPERATING_SYSTEM</td>
+                </tr>
+                <tr>
+                    <td>Version</td>
+                    <td class="version-value table-value">OS_VERSION</td>
+                </tr>
+                <tr>
+                    <td>Machine</td>
+                    <td class="machine-value table-value">MACHINE</td>
+                </tr>
+                <tr>
+                    <td>Processor</td>
+                    <td class="processor-value table-value">PROCESSOR</td>
+                </tr>
+                <tr>
+                    <td>Total Virtual Memory</td>
+                    <td class="tvm-value table-value">TVM</td>
+                </tr>
+                <tr>
+                    <td>CPU Count</td>
+                    <td class="cpu-value table-value">CORES</td>
+                </tr>
+            </table>
         </div>
 
         <div id="node-modal" class="modal">
@@ -54,7 +94,7 @@
                 <div class="modal-header">
                     <span class="modal-close">&times;</span>
                     <h2>Modify Node configurations</h2>
-                    <p class="light small" id="config-load-status">Could not load from save</p>
+                    <p class="light small" id="config-load-status"></p>
                 </div>
                 <div class="modal-body config-body" id="config-body">
                     <div class="cfg-heading">
@@ -82,14 +122,138 @@
                     <div class="cfg-heading">
                         <h2 class="cfg-title">Model Configurations</h2>
                     </div>
-                    <div class="cfg-container">
-                        <div class="cfg-title-container">
-                            <h5 class="cfg-title tooltip">Worker Count<span class="tooltip-text">How many Workers to be
-                                    assigned to each Agent.</span></h5>
-                            <span class="cfg-slider-count" id="worker-counter">3</span>
+                    <div class="column-cfg-wrapper">
+                        <div class="cfg-column">
+                            <div class="cfg-container centered-content">
+                                <div class="column-header">
+                                    <h3>Node Model Configurations</h3>
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title tooltip">Model filepath<span class="tooltip-text">Filepath
+                                            relative to the models folder</span></h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="text" class="cfg-text input" id="node-fp-input"
+                                        placeholder="Filepath for model">
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width top-pad-small">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title">Context Size</h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="number" min="128" value="2048" class="cfg-number-input input"
+                                        id="node-ctx-input">
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width top-pad-small">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title">GPU Layer Offload Count</h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="number" min="0" value="41" class="cfg-number-input input"
+                                        id="node-layer-input">
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width top-pad-small">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title">Batch Size</h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="number" min="128" value="256" class="cfg-number-input input"
+                                        id="node-batch-input">
+                                </div>
+                            </div>
                         </div>
-                        <div class="slider-container">
-                            <input type="range" min="1" max="10" value="3" class="cfg-slider" id="worker-slider">
+                        <div class="cfg-column">
+                            <div class="cfg-container centered-content">
+                                <div class="column-header">
+                                    <h3>Agent Model Configurations</h3>
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title tooltip">Model filepath<span class="tooltip-text">Filepath
+                                            relative to the models folder</span></h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="text" class="cfg-text input" id="agent-fp-input"
+                                        placeholder="Filepath for model">
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width top-pad-small">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title">Context Size</h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="number" min="128" value="2048" class="cfg-number-input input"
+                                        id="agent-ctx-input">
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width top-pad-small">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title">GPU Layer Offload Count</h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="number" min="0" value="41" class="cfg-number-input input"
+                                        id="agent-layer-input">
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width top-pad-small">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title">Batch Size</h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="number" min="128" value="256" class="cfg-number-input input"
+                                        id="agent-batch-input">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="cfg-column">
+                            <div class="cfg-container centered-content">
+                                <div class="column-header">
+                                    <h3>Worker Model Configurations</h3>
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title tooltip">Model filepath<span class="tooltip-text">Filepath
+                                            relative to the models folder</span></h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="text" class="cfg-text input" id="worker-fp-input"
+                                        placeholder="Filepath for model">
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width top-pad-small">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title">Context Size</h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="number" min="128" value="2048" class="cfg-number-input input"
+                                        id="worker-ctx-input">
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width top-pad-small">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title">GPU Layer Offload Count</h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="number" min="0" value="41" class="cfg-number-input input"
+                                        id="worker-layer-input">
+                                </div>
+                            </div>
+                            <div class="cfg-container centered-content full-width top-pad-small">
+                                <div class="cfg-title-container">
+                                    <h5 class="cfg-title">Batch Size</h5>
+                                </div>
+                                <div class="input-container">
+                                    <input type="number" min="128" value="256" class="cfg-number-input input"
+                                        id="worker-batch-input">
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="cfg-heading">
@@ -101,7 +265,7 @@
                                 <h5 class="cfg-title">Temperature</h5>
                             </div>
                             <div class="input-container">
-                                <input type="number" min="0.01" max="1.0" value="0.7" class="cfg-number-input"
+                                <input type="number" min="0.01" max="1.0" value="0.7" class="cfg-number-input input"
                                     id="temp-input" onchange="onInputChanged(this)">
                             </div>
                         </div>
@@ -110,7 +274,7 @@
                                 <h5 class="cfg-title">Top P</h5>
                             </div>
                             <div class="input-container">
-                                <input type="number" min="0.01" max="1.0" value="0.92" class="cfg-number-input"
+                                <input type="number" min="0.01" max="1.0" value="0.92" class="cfg-number-input input"
                                     id="top_p-input" onchange="onInputChanged(this)">
                             </div>
                         </div>
@@ -119,7 +283,7 @@
                                 <h5 class="cfg-title">Min P</h5>
                             </div>
                             <div class="input-container">
-                                <input type="number" min="0.01" max="1.0" value="0.05" class="cfg-number-input"
+                                <input type="number" min="0.01" max="1.0" value="0.05" class="cfg-number-input input"
                                     id="min_p-input" onchange="onInputChanged(this)">
                             </div>
                         </div>
@@ -128,7 +292,7 @@
                                 <h5 class="cfg-title">Max Tokens</h5>
                             </div>
                             <div class="input-container">
-                                <input type="number" min="128" max="8192" value="3000" class="cfg-number-input"
+                                <input type="number" min="128" max="8192" value="3000" class="cfg-number-input input"
                                     id="max_token-input" onchange="onInputChanged(this)">
                             </div>
                         </div>
@@ -137,7 +301,7 @@
                                 <h5 class="cfg-title">Repeat Penalty</h5>
                             </div>
                             <div class="input-container">
-                                <input type="number" min="0.01" max="10" value="1.1" class="cfg-number-input"
+                                <input type="number" min="0.01" max="10" value="1.1" class="cfg-number-input input"
                                     id="repeat_penalty-input" onchange="onInputChanged(this)">
                             </div>
                         </div>
@@ -146,7 +310,7 @@
                                 <h5 class="cfg-title">Presence Penalty</h5>
                             </div>
                             <div class="input-container">
-                                <input type="number" min="0.01" max="100" value="1.0" class="cfg-number-input"
+                                <input type="number" min="0.01" max="100" value="1.0" class="cfg-number-input input"
                                     id="presence_penalty-input" onchange="onInputChanged(this)">
                             </div>
                         </div>
@@ -155,8 +319,8 @@
                                 <h5 class="cfg-title">Top K</h5>
                             </div>
                             <div class="input-container">
-                                <input type="number" min="1" max="1000" value="100" class="cfg-number-input"
-                                    id="top_k-input" onchange="onInputChanged(this)">
+                                <input type="number" min="1" max="1000" value="100" class="cfg-number-input input"
+                                    id="top_k-input">
                             </div>
                         </div>
                         <div class="cfg-container no-width">
@@ -164,8 +328,8 @@
                                 <h5 class="cfg-title">Microstat eta</h5>
                             </div>
                             <div class="input-container">
-                                <input type="number" min="0.01" max="1.0" value="0.1" class="cfg-number-input"
-                                    id="meta-input" onchange="onInputChanged(this)">
+                                <input type="number" min="0.01" max="1.0" value="0.1" class="cfg-number-input input"
+                                    id="meta-input">
                             </div>
                         </div>
                         <div class="cfg-container no-width">
@@ -173,51 +337,17 @@
                                 <h5 class="cfg-title">Microstat tau</h5>
                             </div>
                             <div class="input-container">
-                                <input type="number" min="1" max="100" value="5" class="cfg-number-input"
-                                    id="mtau-input" onchange="onInputChanged(this)">
+                                <input type="number" min="1" max="100" value="5" class="cfg-number-input input"
+                                    id="mtau-input">
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer no-bg">
-                    <button class="gradient-button" id="submit-configs">Submit changes</button>
+                    <button class="gradient-button" id="submit-configs" disabled>Submit changes</button>
                 </div>
             </div>
         </div>
-    </div>
-    <div class="metrics-container">
-        <h3>System Metrics</h3>
-        <p class="metrics-none" id="metrics-none1" style="display:none">No available metrics</p>
-        <table class="metrics-table" id="metrics-table1">
-            <tr>
-                <td>Hostname</td>
-                <td class="hostname-value table-value">HOSTNAME</td>
-            </tr>
-            <tr>
-                <td>OS</td>
-                <td class="os-value table-value">OPERATING_SYSTEM</td>
-            </tr>
-            <tr>
-                <td>Version</td>
-                <td class="version-value table-value">OS_VERSION</td>
-            </tr>
-            <tr>
-                <td>Machine</td>
-                <td class="machine-value table-value">MACHINE</td>
-            </tr>
-            <tr>
-                <td>Processor</td>
-                <td class="processor-value table-value">PROCESSOR</td>
-            </tr>
-            <tr>
-                <td>Total Virtual Memory</td>
-                <td class="tvm-value table-value">TVM</td>
-            </tr>
-            <tr>
-                <td>CPU Count</td>
-                <td class="cpu-value table-value">CORES</td>
-            </tr>
-        </table>
     </div>
     <script src="script.js"></script>
 </body>

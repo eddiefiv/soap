@@ -12,15 +12,22 @@
     --pink-prim-rgb: 200, 80, 192;
     --orange-primary: #ffcc70;
     --orange-prim-rgb: 255, 204, 112;
+    --green-primary: #47ffb6;
+    --green-prim-rgb: 71, 255, 182;
+    --red-primary: #ff6767;
+    --red-prim-rgb: 255, 103, 103;
+    --yellow-primary: #ffa357;
+    --yellow-prim-rgb: 255, 163, 87;
     --link-underline: #c850c0;
     --link-underline-hover: #4158d0;
 }
 
 body {
     font-family: 'Poppins', sans-serif;
-    height: 100%;
+    height: auto;
     margin: 0;
     background-color: var(--bg);
+    overflow-y: auto;
 }
 
 a {
@@ -57,8 +64,13 @@ a:hover {
     background-size: 200% auto;
 }
 
-.gradient-button:hover {
+.gradient-button:hover:not(:disabled) {
     background-position: right center;
+}
+
+.gradient-button:disabled {
+    cursor: default;
+    background-image: linear-gradient(to right, #383838 0%, #6f6f6f 46%, #989898 100%);
 }
 
 .main-container {
@@ -157,6 +169,19 @@ a:hover {
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
+.button-container.flex-center {
+    display: flex;
+    justify-content: center;
+}
+
+.button-container.flex-center.flex-column {
+    flex-direction: column;
+}
+
+.button-container.small-margin {
+    margin-top: 5vh;
+}
+
 .button-container button {
     padding: 1em 2em;
     border-radius: 5px;
@@ -167,11 +192,54 @@ a:hover {
     transition: all 0.3s ease;
 }
 
-.button-container button:hover {
+.button-container button:hover:not(.status-btn) {
     transition: all 0.3s ease;
     background-color: linear-gradient(43deg, var(--purple-primary) 0%, var(--pink-primary) 46%, var(--orange-primary) 100%);
     border: 3px solid rgba(var(--purple-prim-rgb), 0.5);
     color: white;
+}
+
+.button-container .status-btn:not(.active-status):not(.working-status) {
+    background-color: rgba(var(--red-prim-rgb), 0.25);
+    border: 3px solid rgba(var(--red-prim-rgb), 0.25);
+}
+
+.button-container .status-btn:hover:not(.active-status):not(.working-status):not(:disabled) {
+    background-color: rgba(var(--red-prim-rgb), 0.5);
+    border: 3px solid rgba(var(--red-prim-rgb), 0.5);
+}
+
+.button-container .status-btn:disabled {
+    background-color: rgba(128, 128, 128, 0.25);
+    border: 3px solid rgba(128, 128, 128, 0.25);
+    cursor: default;
+}
+
+.button-container .status-btn.active-status {
+    background-color: rgba(var(--green-prim-rgb), 0.25);
+    border: 3px solid rgba(var(--green-prim-rgb), 0.25);
+}
+
+.button-container .status-btn.active-status:hover:not(:disabled) {
+    background-color: rgba(var(--green-prim-rgb), 0.5);
+    border: 3px solid rgba(var(--green-prim-rgb), 0.5);
+}
+
+.button-container .status-btn.working-status {
+    background-color: rgba(var(--yellow-prim-rgb), 0.25);
+    border: 3px solid rgba(var(--yellow-prim-rgb), 0.25);
+}
+
+.button-container .status-btn.working-status:hover:not(:disabled) {
+    background-color: rgba(var(--yellow-prim-rgb), 0.5);
+    border: 3px solid rgba(var(--yellow-prim-rgb), 0.5);
+}
+
+.container-subheader h3 {
+    padding-bottom: .2em;
+    margin: 0;
+    display: flex;
+    justify-content: center;
 }
 
 /* The Modal (background) */
@@ -213,6 +281,7 @@ a:hover {
     width: 80%;
     max-height: 80%;
     overflow-y: auto;
+    overflow-x: hidden;
     box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
     -webkit-animation-name: animatetop;
     -webkit-animation-duration: 0.4s;
@@ -354,7 +423,17 @@ a:hover {
 }
 
 .cfg-container {
+    display: inline-flex;
+    flex-direction: column;
     width: 45%;
+}
+
+.centered-content {
+    align-items: center;
+}
+
+.full-width {
+    width: 100%;
 }
 
 .cfg-container.no-width {
@@ -373,6 +452,23 @@ a:hover {
     display: flex;
     justify-content: space-between;
     flex-wrap: wrap;
+}
+
+.column-cfg-wrapper {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    flex-wrap: wrap;
+}
+
+.cfg-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
 }
 
 .cfg-heading {
@@ -398,12 +494,17 @@ a:hover {
     justify-content: center;
 }
 
-.cfg-number-input {
+.input {
     border: none;
     border-radius: 5px;
     padding: 0.75em;
     background-color: #d3d3d3;
     font-size: 12px;
+    width: 100%;
+}
+
+.top-pad-small {
+    padding: 1em;
 }
 
 .cfg-slider {
@@ -462,6 +563,7 @@ a:hover {
 .metrics-table {
     font-size: 10px;
     border-collapse: collapse;
+    color: white;
 }
 
 .metrics-table td {
