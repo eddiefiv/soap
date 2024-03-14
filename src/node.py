@@ -10,7 +10,7 @@ from multiprocessing import Queue
 from agent import Agent
 
 from utils.helpers.constants import *
-from utils.helpers.all_helpers import create_ws_message, load_model, inference_model
+from utils.helpers.all_helpers import create_ws_message, load_model, inference_model, load_config
 from utils.console import *
 
 from platform import system, version, machine, processor
@@ -62,6 +62,7 @@ class Node():
     def set_main_config(self, config = None):
         """Sets the :class:`Node`'s config and updates console with debug mode"""
         self.global_config = config
+        self.node_config = config['network_configs']['node']
 
         # Set consoles debug mode
         set_debug_mode(config['dev']['debug_mode'])
@@ -79,6 +80,9 @@ class Node():
             except:
                 print_error("Could not contact backend to update Node status. This may warrant a complete Node restart.")
 
+            # Send to udpate localhost node records and audit
+            await ws.send(create_ws_message(type = "node_ready", origin = self.node_name, target = gethostname()))
+
             while True:
                 res = await ws.recv()
                 res = json.loads(res)
@@ -89,14 +93,24 @@ class Node():
         '''Inferences the LLM with the main prompt that is then to be split up into tasks amongst the :class:`Agent`'s'''
         # Parse and send the prompt to the model to be inferenced
         try:
-            model = load_model(os.path.join(MODELS_DIRECTORY, self.global_config['llama_cpp_settings']['node']['filepath']))
-            out = inference_model(model, chat_format, sys_prompt, prompt, self.global_config['llama_cpp_settings']['hyperparams'])
+            model = load_model(
+                os.path.join(MODELS_DIRECTORY, self.node_config['filepath']),
+                self.node_config['gpu_layer_count'],
+                self.node_config['ctx_size'],
+                self.node_config['batch_size'],
+                verbose = True)
+            out = inference_model(
+                model = model,
+                chat_format = chat_format,
+                system_message = sys_prompt,
+                user_message = prompt,
+                hyperparams = self.global_config['network_configs']['hyperparams'])
+            print_debug(out)
             if out is not None:
-                out = json.loads(out)
+                if type(out) == str:
+                    out = json.loads(out)
             else:
                 print_error(f"{self.node_name} returned None during inference. No output from model was recevied.")
-
-            print_debug(out)
 
             # Take the output and verify it is in the proper format
             if 'item' in out:
@@ -105,23 +119,33 @@ class Node():
                     self.agent_task_queue.put(instruction['action'])
             else:
                 print_error(f"{self.node_name}: Model output not of desired type.\n\n-- Output --\n{out}\n\nCurrent instruction is being negated.")
-        except:
-            print_error(f"{self.node_name}: An error occurred while loading LLM. Current instruction is being negated.")
+        except Exception as e:
+            print_error(f"{self.node_name}: An error occurred while loading LLM. Current instruction is being negated.\n\n---- Cause----\n\n{repr(e)}")
 
     async def _parse(self, msg):
-        if msg['target'] == self.node_name or msg['target'] == "any_node":
+        if msg['target'] == self.node_name or msg['target'] == "any_node" or msg['target'] == "any":
+            if msg['type'] == "update_config":
+                # Attempt to load the config
+                cfg = load_config()
+
+                if cfg is not False:
+                    self.global_config = cfg
+                    self.node_config = cfg['network_configs']['node']
+                    print_success("Node successfully hot-loaded new config")
             if msg['type'] == "function_invoke":
                 if msg['data']['function_to_invoke'] == "attach_agent": # Specific bc of the way the parameters are serialized
                     _params = msg['data']['params']
                     await self.attach_agent(uses_inference_endpoint = _params['uses_inference_endpoint'], inference_endpoint = _params['inference_endpoint'], uid = jsonpickle.decode(_params['uid']))
             elif msg['type'] == "new_instruction":
-                print_success("This node has been selected for work!")
+                print_step("This Node has been selected for work!", justification = "center", style = "bright_blue")
+                print_info(f"Node has begun a new task: {msg['data']['instruction']}")
+                print_debug(f"Node received task: {msg['data']}")
+
                 # Let localhost know this Node is working
                 requests.post(f"{endpoint}/node-status", data = json.dumps({"status": "working"}), headers = {'Content-Type': 'application/json'})
-                # Inference the incoming instruction and parse it down into smaller bits to then be added to the Agent Task Queue
-                print_error(msg)
-                ins = msg['data']['instruction']
 
+                # Inference the incoming instruction and parse it down into smaller bits to then be added to the Agent Task Queue
+                ins = msg['data']['instruction']
                 await self.inference(CHAT_ML_PROMPT_FORMAT, SYSTEM_PROMPT_WIN_LINUX_NODE, ins)
             elif msg['type'] == "node_add_queue_item":
                 # Add item to queue

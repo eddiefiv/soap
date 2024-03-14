@@ -5,6 +5,8 @@ class WorkerTask(Enum):
     GOTO = 1
     CLICK = 2
     TYPE = 3
+    WRITE = 4
+    GENERATE_CODE = 5
 
 class SingleInstruction():
     def __init__(self, task, action):

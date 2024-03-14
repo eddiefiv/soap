@@ -14,7 +14,7 @@ from multiprocessing import Queue
 
 from utils.helpers.constants import *
 from utils.helpers.worker_helpers import SingleInstruction, MultiInstruction
-from utils.helpers.all_helpers import create_ws_message
+from utils.helpers.all_helpers import create_ws_message, load_config, load_model, inference_model
 from utils.console import *
 
 class Worker():
@@ -23,7 +23,7 @@ class Worker():
     A :class:`Worker` is attached to an :class:`Agent` by calling the `.attach_worker()` within the parent :class:`Agent`.
     A :class:`Worker` CAN report back to the :class:`Agent` to perform succeeding tasks. The Worker is the one who give the :class:`Agent` the OK to move on to the next task'''
 
-    def __init__(self, parent_agent, task_queue: Queue, uid):
+    def __init__(self, parent_agent, task_queue: Queue, uid, config):
         self.is_working = False
         self.state: WorkerState = WorkerState.STARTING
         self._parent_agent_name = parent_agent
@@ -31,6 +31,9 @@ class Worker():
         self.task_queue = task_queue
         self.worker_name = self._parent_agent_name + "_Worker-" + self.worker_uuid
         self.web_driver_path = "webdrivers/chromedriver-win64/chromedriver.exe" if platform.system() == "Windows" else "webdrivers/chromdriver-linux64/chromedriver"
+
+        self.global_config = config
+        self.worker_config = config['network_configs']['worker']
 
     def sync_start(self):
         '''Starts the :class:`Worker`. Initially, the worker will run through it's first retrieved task, then listen for websocket messages.
@@ -92,19 +95,17 @@ class Worker():
 
         self.web_driver.close()
 
-    async def give_instructions(self, instructions: SingleInstruction):
-        if isinstance(instructions, SingleInstruction) or isinstance(instructions, MultiInstruction):
-            _i = 1
-            for instruction in instructions.get_action_list():
-                self.state = WorkerState.TRANSITIONING
-                print_substep(f"{self} | Running instruction {_i} of {len(instructions.get_action_list())}...", style = "cyan1")
-                print_table(f"{self} Instruction {_i}", items = [[instruction.task.name, instruction.action]], columns = ["Task ID", "Task Action"], color = "blue1")
-                await self.do(instruction)
-                print_substep(f"{self} | Instruction {_i} of {len(instructions.get_action_list())} complete!", style = "cyan1")
-                _i += 1
-            await self.report_completion()
-        else:
-            print_error(f"{self.worker_name}: Cannot parse task, discarding...")
+    async def give_instructions(self, instructions):
+        '''Take an instruction set and proceed with it'''
+        _i = 1
+        for instruction in instructions:
+            self.state = WorkerState.TRANSITIONING
+            print_substep(f"{self} | Running instruction {_i} of {len(instructions)}...", style = "cyan1")
+            print_table(f"{self} Instruction {_i}", items = [[instruction['operation'], instruction['action']]], columns = ["Task ID", "Task Action"], color = "blue1")
+            await self.do(instruction)
+            print_substep(f"{self} | Instruction {_i} of {len(instructions)} complete!", style = "cyan1")
+            _i += 1
+        await self.report_completion()
 
     async def report_completion(self):
         '''Reports back to the parent :class:`Agent` to inform it that the task has been completed and it is ready for a new one.'''
@@ -119,7 +120,15 @@ class Worker():
         await self.ws.send(create_ws_message(type = "worker_update", origin = self.worker_name, target = self._parent_agent_name, data = {"new_state": new_state.value})) # TODO
 
     async def _parse(self, msg):
-        if msg['target'] == self.worker_name:
+        if msg['target'] == self.worker_name or msg['target'] == "any":
+            if msg['type'] == "update_config":
+                # Attempt to load the config
+                cfg = load_config()
+
+                if cfg is not False:
+                    self.global_config = cfg
+                    self.worker_config = cfg['network_configs']
+                    print_success(f"{self.worker_name} successfully hot-loaded new config")
             if msg['type'] == "worker_dequeue":
                 await self.dequeue()
 
@@ -141,17 +150,23 @@ class Worker():
                 # Let parenting Agent know
                 await self.ws.send(create_ws_message(type = "worker_complete", origin = self.worker_name, target = self.agent))
 
-    async def do(self, instruction: SingleInstruction):
-        _task = instruction.task.value
-        print_debug(_task)
-        if _task == WorkerTask.GOTO.value:
-            await self.goto(instruction.action)
-        elif _task == WorkerTask.SCREENSHOT.value:
+    async def do(self, instruction):
+        #_task = instruction.task.value
+        operation = instruction['operation']
+        action = instruction['action']
+        print_debug(instruction)
+        if operation == "goto":
+            await self.goto(action)
+        elif operation == "screenshot":
             await self.screenshot_full(self.worker_uuid)
+        elif operation == "write":
+            await self.write_to_file(action['content'], action['filename'] + action['extension'])
+        elif operation == "generate_code":
+            await self.inference_code_description(action['content'], action['filename'] + action['extension'])
         else:
-            print_error(f"Invalid WorkerTask type: {_task}")
+            print_error(f"Invalid WorkerTask type: {instruction}")
 
-    # ----- INSTRUCTIONS -----
+    # ---- INSTRUCTIONS ----
 
     async def goto(self, url):
         '''Goes to the specified url and returns a page'''
@@ -177,8 +192,46 @@ class Worker():
         except Exception as e:
             print_error("Failed to ss" + e)
 
-    async def write_to_file(self, content, extension):
-        pass
+    async def write_to_file(self, filepath, content):
+        '''Writes content to a file
+
+        Params:
+            filepath: the filepath of the file to be written
+            content: what to go in the file
+        '''
+        with open(os.path.join(NETWORK_GEN, filepath), 'w') as f:
+            f.write(content)
+
+    async def inference_code_description(self, description, filename):
+        '''Generates code using a finetuned code model given the code description and writes it to a file
+
+        Params
+            description: the description of the code to be generated
+            filename: the file to save the code in the network_gen directory
+        '''
+
+        model = load_model(
+            os.path.join(MODELS_DIRECTORY, self.worker_config['finetuned']['code_model_filepath']),
+            self.worker_config['gpu_layer_count'],
+            self.worker_config['ctx_size'],
+            self.worker_config['batch_size'],
+            verbose = True)
+        out = inference_model(
+            model = model,
+            chat_format = CHAT_ML_PROMPT_FORMAT,
+            system_message = SYSTEM_PROMPT_WIN_LINUX_FINETUNED_CODE,
+            user_message = description,
+            hyperparams = self.global_config['network_configs']['hyperparams'])
+
+        if out is not None:
+            if type(out) == str:
+                out = json.loads(out)
+        else:
+            print_error(f"{self.worker_name} returned None during inference. No output from model was received.")
+            return
+
+        with open(os.path.join(NETWORK_GEN, filename), 'w') as f:
+            f.write(out)
 
     def __str__(self):
         return f"Worker {self.worker_name}"

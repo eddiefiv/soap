@@ -105,10 +105,10 @@ function setNodeMetrics(data) {
 function setConfigs(data) {
     console.log(data);
     if (data['general']) {
-        document.getElementById('config-load-status').textContent = "Configs loaded from local config!"
+        document.getElementById('config-load-status').textContent = "Configs loaded from local config! (Reload the page to view the most recent version of configs)";
 
         const general = data['general'];
-        const modelJson = data['llama_cpp_settings'];
+        const modelJson = data['network_configs'];
 
         // Update the config elements
         // General configs
@@ -145,7 +145,7 @@ function setConfigs(data) {
         microstatTau.value = modelJson['hyperparams']['microstat_tau'];
 
     } else {
-        document.getElementById('config-load-status').textContent = "Config could not be loaded from local config. Ensure either config.json exists or autogen.json with a valid config filepath inside."
+        document.getElementById('config-load-status').textContent = "Config could not be loaded from local config. Ensure either config.json exists or gen.json with a valid config filepath inside."
         document.getElementById('config-body').style.display = 'none';
         configSubmitButton.disabled = true;
     }
@@ -204,6 +204,9 @@ function setLocalhostStatus(status) {
         promptInput.placeholder = "Prompt for soap network...";
         promptInput.disabled = false;
         sendBtn.disabled = false;
+
+        document.getElementById('config-load-status').textContent = "Configs loaded from local config! (Reload the page to view the most recent version of configs)";
+        document.getElementById('config-body').style.display = 'flex';
     } else {
         promptInput.placeholder = "No connection to localhost. Ensure localserve.js is active. Attempting to re-establish...";
 
@@ -246,7 +249,7 @@ configSubmitButton.onclick = function () {
             "agent_count": parseInt(agentConfigSlider.value),
             "worker_count": parseInt(workerConfigSlider.value)
         },
-        "llama_cpp_settings": {
+        "network_configs": {
             "node": {
                 "filepath": nodeModelFilepath.value === "" ? null : nodeModelFilepath.value,
                 "ctx_size": parseInt(nodeCtxSize.value),

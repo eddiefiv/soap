@@ -14,7 +14,7 @@ from multiprocessing import Queue
 
 from utils.helpers.agent_helpers import get_inference_config, validate_endpoint
 from utils.helpers.worker_helpers import *
-from utils.helpers.all_helpers import create_ws_message, load_model, inference_model
+from utils.helpers.all_helpers import create_ws_message, load_model, inference_model, load_config
 from utils.helpers.constants import *
 
 from utils.console import *
@@ -36,6 +36,7 @@ class Agent():
 
         # Set the global config sent from the node
         self.global_config = global_config
+        self.agent_config = global_config['network_configs']['agent']
 
         # Update consoles debug mode
         set_debug_mode(global_config['dev']['debug_mode'])
@@ -113,7 +114,7 @@ class Agent():
                 print_info(f"{self.agent_name}: Creating and attaching Worker {_} of {_num_max_workers}")
                 await self._employ_worker(self.agent_name, self.task_queue, uuid.uuid4())
                 _num_success += 1
-            except:
+            except Exception as e:
                 print_error(f"{self.agent_name}: Worker creation and attachment failed. Skipping.")
 
         print_success(f"{self.agent_name}: Successfully created and attached {_num_success} of {_num_max_workers} Workers!")
@@ -157,8 +158,8 @@ class Agent():
 
             print_success(f"{self.agent_name}: Agent found task: {task}")
 
-            # NOTE: In production, task would inference on Agent further, then be sent to Workers
-            await self.instruct("null", task)
+            # Begin the prompting to parse task further
+            await self.instruct(task, task)
 
             # Let parenting Node know an item has been pulled and dealt with
             await self.ws.send(create_ws_message(type = "agent_dequeue_success", origin = self.agent_name, target = self._parent_node_name))
@@ -188,7 +189,15 @@ class Agent():
         pass
 
     async def _parse(self, msg):
-        if msg['target'] == self.agent_name or msg['target'] == "any_agent":
+        if msg['target'] == self.agent_name or msg['target'] == "any_agent" or msg['target'] == "any":
+            if msg['type'] == "update_config":
+                # Attempt to load the config
+                cfg = load_config()
+
+                if cfg is not False:
+                    self.global_config = cfg
+                    self.agent_config = cfg['network_configs']['agent']
+                    print_success(f"{self.agent_name} successfully hot-loaded new config")
             if msg['type'] == "function_invoke":
                 if msg['data']['function_to_invoke'] == "instruct":
                     self.instruct(prompt = msg['data']['params']['prompt'])
@@ -250,23 +259,30 @@ class Agent():
         #assert self.is_valid, "No valid endpoint provided, please update the endpoint using .update_endpoint() and then .reload_agent()"
 
         # Inference model and split up the selected task from node into smaller pieces for workers
-        model = load_model(os.path.join(MODELS_DIRECTORY, self.global_config['llama_cpp_settings']['agent']['filepath']))
+        model = load_model(
+            os.path.join(MODELS_DIRECTORY, self.global_config['network_configs']['agent']['filepath']),
+            self.agent_config['gpu_layer_count'],
+            self.agent_config['ctx_size'],
+            self.agent_config['batch_size'],
+            verbose = True)
         out = inference_model(
             model = model,
             chat_format = CHAT_ML_PROMPT_FORMAT,
             system_message = SYSTEM_PROMPT_WIN_LINUX_AGENT,
             user_message = prompt,
-            hyperparams = self.global_config['llama_cpp_settings']['hyperparams']
+            hyperparams = self.global_config['network_configs']['hyperparams']
         )
         if out is not None:
-            out = json.loads(out)
+            if type(out) == str:
+                out = json.loads(out)
         else:
             print_error(f"{self.agent_name} returned None during inference. No output from model was received.")
 
         # Reconstruct the instruction after inferencing
-        task = out['item']['instruction_set']
-        task = reconstruct_multi_instruction(task)
-        self.task_queue.put(task)
+        instructions = out['item']['instruction_set']
+        #task = reconstruct_multi_instruction(task)
+        for instruction in instructions:
+            self.task_queue.put([instruction])
 
         # Unidle all workers that were previously idle
         for worker in self.get_idle_workers():
@@ -295,7 +311,7 @@ class Agent():
         '''Initializes a new :class:`Worker` and attaches them to this object'''
         print_substep(f"{self.agent_name}: Employing new Worker with UUID: {uuid}", style = "bright_blue")
 
-        worker = Worker(parent_agent = parent_agent, task_queue = task_queue, uid = uuid)
+        worker = Worker(parent_agent = parent_agent, task_queue = task_queue, uid = uuid, config = self.global_config)
         self._workers.append({"name": worker.worker_name, "state": WorkerState.IDLE.value})
 
         _p = multiprocessing.Process(target = worker.sync_start, name = f"Thread-{worker.worker_name}")

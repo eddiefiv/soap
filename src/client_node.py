@@ -16,8 +16,7 @@ from utils.helpers.all_helpers import create_ws_message
 from utils.console import *
 
 # Constants
-AUTOGEN_DIRECTORY = os.path.join(CONFIG_DIRECTORY, "autogen.json")
-print(AUTOGEN_DIRECTORY)
+AUTOGEN_DIRECTORY = os.path.join(CONFIG_DIRECTORY, "gen.json")
 
 async def main(config):
     # Check to make sure localhost ws is served before proceeding
@@ -121,35 +120,35 @@ if __name__ == "__main__":
     # If a config was supplied
     if args.config is not None:
         if not os.path.exists(args.config):
-            print_warning("Invalid config filepath supplied in --config. Resorting to autogen.json saved config if it exists.")
+            print_warning("Invalid config filepath supplied in --config. Resorting to gen.json saved config if it exists.")
 
         if os.path.exists(AUTOGEN_DIRECTORY):
-            print_debug(f"Overwriting autogen.json with new config: {args.config}")
+            print_debug(f"Overwriting gen.json with new config: {args.config}")
             with open(AUTOGEN_DIRECTORY, 'w') as f:
                 _data = {
                     "last_config_filepath": os.path.abspath(args.config)
                 }
                 f.write(json.dumps(_data, indent = 4))
 
-    # Try to load autogen.json
+    # Try to load gen.json
     if os.path.isfile(AUTOGEN_DIRECTORY):
         with open(AUTOGEN_DIRECTORY, "r") as f:
             _ = f.read()
-            autogen_config = json.loads(_)
-        
+            gen_config = json.loads(_)
+
         try:
-            print_info("Found a saved config file in autogen.json, attempting to load...")
-            if autogen_config['last_config_filepath'] is not None:
-                with open(autogen_config['last_config_filepath'], 'r') as f:
+            print_info("Found a saved config file in gen.json, attempting to load...")
+            if gen_config['last_config_filepath'] is not None:
+                with open(gen_config['last_config_filepath'], 'r') as f:
                     config_json = json.loads(f.read())
-                print_success(f"Config loaded from {autogen_config['last_config_filepath']}")
+                print_success(f"Config loaded from {gen_config['last_config_filepath']}")
         except:
-            print_error("A problem occurred while attempting to read the last config filepath from autogen.json. Check the filepath is correct or supply a valid config filepath using --config.")
+            print_error("A problem occurred while attempting to read the last config filepath from gen.json. Check the filepath is correct or supply a valid config filepath using --config.")
             quit(1)
     else:
-        # No autogen found, --agent_count and --worker_count is required
-        print_warning("No autogen.json configuration file found. Creating one automatically. This should only occur during the first run")
-        
+        # No gen found, --agent_count and --worker_count is required
+        print_warning("No gen.json configuration file found. Creating one automatically. This should only occur during the first run")
+
         # If --config was supplied check for validity, otherwise quit
         if args.config is not None:
             if not os.path.exists(args.config):
@@ -159,14 +158,14 @@ if __name__ == "__main__":
             print_error("Valid --config must be supplied during first run.")
             quit(1)
 
-        # Write the --config directory to autogen
+        # Write the --config directory to gen
         with open(AUTOGEN_DIRECTORY, 'w') as f:
             _data = {
                 "last_config_filepath": os.path.abspath(args.config)
             }
             f.write(json.dumps(_data, indent = 4))
 
-        print_info(f"Created autogen.json at {AUTOGEN_DIRECTORY}")
+        print_info(f"Created gen.json at {AUTOGEN_DIRECTORY}")
 
         # Load the new config
         with open(args.config, 'r') as f:

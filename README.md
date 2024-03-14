@@ -1,4 +1,4 @@
-# SOAP (formerly Corporate America)
+# soap (formerly Corporate America)
 
 ![Image of Corporate America city](https://i.imgur.com/mJsrg0y.png)
 
@@ -16,9 +16,10 @@ Self-Operated Agent Protocol (soap) is a fully functional OOTB framework for run
     - Linux embedded development with C++
 ## Getting Started and Installation
 
-### Install llama-cpp
 
-Install from either one of the guides to ensure the right version and type of `llama-cpp` is installed
+### Install `llama-cpp-python`
+
+Install from either one of the guides to ensure the right version and type of `llama-cpp-python` is installed
 
 [CPU Only Installation](https://python.langchain.com/docs/integrations/llms/llamacpp#cpu-only-installation)
 
@@ -28,13 +29,15 @@ Install from either one of the guides to ensure the right version and type of `l
 
 [Windows](https://python.langchain.com/docs/integrations/llms/llamacpp#installation-with-windows)
 
-### Clone this repository
+### Install source and dependencies
+
+#### Clone this repository
 
 ```shell
 git clone https://eddiefiv/CorporateAmerica.git
 ```
 
-### Install Python dependencies
+#### Install Python dependencies
 ```shell
 pip install -r requirements.txt
 ```

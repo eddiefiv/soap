@@ -3,7 +3,7 @@ const WebSocket = require('ws');
 const express = require('express');
 const os = require('os');
 const fs = require('fs');
-const { Client, EmbedBuilder, GatewayIntentBits } = require('discord.js');
+const { Client, EmbedBuilder, GatewayIntentBits, WorkerReceivePayloadOp } = require('discord.js');
 const { exit } = require('process');
 const { botID } = require('./config/BOT_ID.json')
 
@@ -18,6 +18,9 @@ const NodeStatus = {
 }
 
 // Other vars
+var nodeWsClient = null;
+var agentClients = [];
+var workerClients = [];
 var nodeStatus = NodeStatus.OFFLINE;
 
 // Try to grab the token from the file
@@ -25,7 +28,7 @@ let DISCORD_TOKEN = null
 try {
     DISCORD_TOKEN = fs.readFileSync('./config/disctoken.txt', 'utf8').trim();
 } catch {
-    print("No token file found. Exiting.")
+    print("No token file found. Exiting.");
     exit(0);
 }
 const DISCORD_CHANNEL_ID = '1195786304563195984';
@@ -41,14 +44,13 @@ const channel = discordClient.channels.cache.get(DISCORD_CHANNEL_ID);
 // ---- DISCORD FUNCTIONS ----
 discordClient.on('ready', () => {
     print(`${discordClient.user.tag} has logged in`);
-})
+});
 discordClient.on('messageCreate', (message) => {
     // Ignore messages from self
     if (message.author.id === botID) return;
     // Listen for messages from bots
     print(message.content);
-})
-
+});
 
 // Serve the webui
 const app = express();
@@ -72,14 +74,14 @@ app.get("/node-metrics", function (req, res) {
     }
 });
 app.get("/config", function (req, res) {
-    // First try to find autogen
-    if (doesFileExist(__dirname + "/config/autogen.json")) {
-        var autogenData = JSON.parse(fs.readFileSync(__dirname + "/config/autogen.json"));
-        var autogenConfigDirectory = autogenData['last_config_filepath'];
+    // First try to find gen
+    if (doesFileExist(__dirname + "/config/gen.json")) {
+        var genData = JSON.parse(fs.readFileSync(__dirname + "/config/gen.json"));
+        var genConfigDirectory = genData['last_config_filepath'];
 
-        // Check to see if the config found in autogen exists, if so, send it
-        if (doesFileExist(autogenConfigDirectory)) {
-            res.sendFile(autogenConfigDirectory);
+        // Check to see if the config found in gen exists, if so, send it
+        if (doesFileExist(genConfigDirectory)) {
+            res.sendFile(genConfigDirectory);
         }
         // Check if default config exists
     } else if (doesFileExist(__dirname + "/config/config.json")) {
@@ -98,23 +100,25 @@ app.post("/prompt", function (req, res) {
 });
 app.post("/config", function (req, res) {
     // Write to the config
-    // First try to find autogen
-    if (doesFileExist(__dirname + "/config/autogen.json")) {
-        var autogenData = JSON.parse(fs.readFileSync(__dirname + "/config/autogen.json"));
-        var autogenConfigDirectory = autogenData['last_config_filepath'];
+    // First try to find gen
+    if (doesFileExist(__dirname + "/config/gen.json")) {
+        var genData = JSON.parse(fs.readFileSync(__dirname + "/config/gen.json"));
+        var genConfigDirectory = genData['last_config_filepath'];
 
-        // Check to see if the config found in autogen exists, if so, write to it
-        if (doesFileExist(autogenConfigDirectory)) {
-            fs.writeFile(autogenConfigDirectory, JSON.stringify(req.body, null, "\t"), (err) => {
+        // Check to see if the config found in gen exists, if so, write to it
+        if (doesFileExist(genConfigDirectory)) {
+            fs.writeFile(genConfigDirectory, JSON.stringify(req.body, null, "\t"), (err) => {
                 if (err) throw err;
-                print("Config updated from API");
+                print("Config updated from WebUI");
+                sendToAll(createWsMessage(type = 'update_config', origin = os.hostname(), target = "any", data = {}, false), null, false);
             });
         }
         // Check if default config exists
     } else if (doesFileExist(__dirname + "/config/config.json")) {
         fs.writeFile(__dirname + "/config/config.json", JSON.stringify(req.body, null, "\t"), (err) => {
             if (err) throw err;
-            print("Config updated from API");
+            print("Config updated from WebUI");
+            sendToAll(createWsMessage(type = 'update_config', origin = os.hostname(), target = "any", data = {}, false), null, false);
         });
     } else {
         res.end(JSON.stringify({ "success": false, "msg": "no config file" }));
@@ -160,8 +164,12 @@ function print(message) {
     console.log(`[${timestamp}] ${message}`);
 }
 
-function createWsMessage(type, origin, target, data = {}) {
-    return JSON.stringify({ type: type, origin: origin, target: target, data: data });
+function createWsMessage(type, origin, target, data = {}, strfy = true) {
+    if (strfy) {
+        return JSON.stringify({ type: type, origin: origin, target: target, data: data });
+    } else {
+        return { type: type, origin: origin, target: target, data: data }
+    }
 }
 
 function sendToAll(message, sender, exceptSender) {
@@ -181,7 +189,7 @@ function sendToAll(message, sender, exceptSender) {
 }
 
 function sendToDiscord(content) {
-    const chn = discordClient.channels.fetch("1195786304563195984");
+    const chn = discordClient.channels.fetch(DISCORD_CHANNEL_ID);
     // Send discord embed
     const embed = new EmbedBuilder().setColor('#0099ff').setTitle('GCP soap Server Interaction').setDescription(`\n\n**Payload**\n\n> **Originating Device**\n> ${content['origin']}\n\n> **Interaction Type**\n> ${content['type']}\n\n> **From**\n> ${content['origin']}\n\n> **Target**\n> ${content['target']}\n\n> **Metadata**\n> ${content['metadata']}`).setAuthor({ name: os.hostname(), iconURL: "https://icons.iconarchive.com/icons/elegantthemes/beautiful-flat/256/Computer-icon.png" });
 
@@ -200,10 +208,29 @@ function parseMessage(unparsed, parsedmessage, ws) {
             case 'function_invoke':
                 sendToAll(parsedmessage, ws, true);
                 break;
+            case 'node_ready':
+                // Check to make sure node doesn't exist already
+                if (nodeWsClient == null) {
+                    nodeWsClient = ws;
+                } else {
+                    print("Only one node can run at a time. Sending shutdown signals to future Nodes while one is already active.");
+                    // Send shutdown message to node if it already exists
+                    ws.send(createWsMessage(type = "node_shutdown", origin = os.hostname(), target = parsedmessage['origin'], data = { "graceful": false }));
+                }
             case 'node_add_queue_item':
                 sendToAll(parsedmessage, ws, false);
                 break;
             case 'agent_ready':
+                // Check to make sure agent isn't already in the list
+                let agentPresent = false;
+                agentClients.forEach(function (ac) {
+                    if (ac['agentName'] === parsedmessage['origin']) {
+                        agentPresent = true;
+                    }
+                });
+                if (!agentPresent) {
+                    agentClients.push({ 'wsClient': ws, 'agentName': parsedmessage['origin'] })
+                }
                 sendToAll(parsedmessage, ws, false);
                 break;
             case 'agent_complete':
@@ -216,6 +243,16 @@ function parseMessage(unparsed, parsedmessage, ws) {
                 sendToAll(parsedmessage, ws, true);
                 break;
             case 'worker_ready':
+                // Check to make sure worker isn't already in the list
+                let workerPresent = false;
+                workerClients.forEach(function (wc) {
+                    if (wc['workerName'] === parsedmessage['origin']) {
+                        workerPresent = true;
+                    }
+                });
+                if (!workerPresent) {
+                    workerClients.push({ 'wsClient': ws, 'workerName': parsedmessage['origin'] })
+                }
                 sendToAll(parsedmessage, ws, true);
                 break;
             case 'worker_complete':
@@ -228,10 +265,10 @@ function parseMessage(unparsed, parsedmessage, ws) {
                 sendToAll(parsedmessage, ws, false);
                 break;
             default:
-                print(`Unknown message type: ${parsedmessage.type}`)
+                print(`Unknown message type: ${parsedmessage.type}`);
         }
     } catch (error) {
-        print(`Error parsing message with error: ${error}`)
+        print(`Error parsing message with error: ${error}`);
     }
 }
 
@@ -267,7 +304,32 @@ wss.on('connection', function connection(ws) {
     });
 
     ws.on('close', function close() {
-        print(`Client disconnected`);
+        // Find out who disconnected
+        if (nodeWsClient == ws) {
+            nodeWsClient = null;
+            nodeStatus = NodeStatus.OFFLINE;
+
+            print("Node disconnected. No more instruction will be parsed on this machine until a Node reset.");
+            return;
+        } else {
+            agentClients.forEach(function (ac) {
+                if (ac['wsClient'] == ws) {
+                    delete agentClients[agentClients.indexOf(ac)];
+                    print(ac['agentName'] + " disconnected");
+                    return;
+                }
+            });
+
+            workerClients.forEach(function (wc) {
+                if (wc['wsClient'] == ws) {
+                    delete workerClients[workerClients.indexOf(wc)];
+                    print(wc['workerName'] + " disconnected")
+                    return;
+                }
+            });
+        }
+
+        print("Unknown client disconnected");
     });
 });
 
@@ -282,7 +344,7 @@ GCPws.on('open', function () {
     GCPws.send(createWsMessage(type = "serverConnect", origin = os.hostname(), target = "GCP soap Server", data = { "hostname": os.hostname() }));
 });
 GCPws.on('error', function () {
-    console.log("Error during interaction with GCP WebSocket. Could be fatal.")
+    console.log("Error during interaction with GCP WebSocket. Could be fatal.");
 });
 GCPws.on('message', function (message) {
     const parsedMessage = JSON.parse(message);
@@ -301,4 +363,4 @@ GCPws.on('message', function (message) {
         default:
             print(`Unknown message type: ${parsedMessage['type']}`)
     }
-})
+});

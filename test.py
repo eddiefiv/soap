@@ -1,3 +1,5 @@
+import json
+
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_community.llms.llamacpp import LlamaCpp
@@ -39,27 +41,48 @@ messages.append(user_prompt)
 # tokenized_chat = tokenizer.apply_chat_template(messages, tokenize = True, add_generation_prompt = True, return_tensors = "pt")
 # print(tokenized_chat)
 
-llm = Llama(
-    model_path = "models/openhermes-2.5-mistral-7b.Q5_K_M.gguf",
-    n_gpu_layers = 33,
-    n_ctx = 8192,
-    n_batch = 256,
-    verbose = True
-)
+def load_model():
+    llm = Llama(
+        model_path = "models/openhermes-2.5-mistral-7b.Q5_K_M.gguf",
+        n_gpu_layers = 33,
+        n_ctx = 8192,
+        n_batch = 256,
+        verbose = True
+    )
+
+    return llm
 
 #llm.tokenize(bytes(messages))
 
-output = llm.create_completion(
-    prompt = CHAT_ML_PROMPT_FORMAT(SYSTEM_PROMPT_WIN_LINUX_NODE, "I want to make a discord bot to run on my machine. It should have 2 slash commands: mainMenu and settingsMenu. Both menus should display a simple embed and 1 red button for deleting the message (closing out the menu)."),
-    temperature = 0.7,
-    max_tokens = 16000,
-    top_p = 0.92,
-    min_p = 0.05,
-    repeat_penalty = 1.1,
-    presence_penalty = 1.0,
-    top_k = 100,
-    mirostat_eta = 0.1,
-    mirostat_tau = 5
-)
+def inference_model(model):
+    output = model.create_completion(
+        prompt = CHAT_ML_PROMPT_FORMAT(SYSTEM_PROMPT_WIN_LINUX_NODE, "I want to make a crypto trading bot that interacts with TradingView for price data in python. The bot will trade using the DyDx API. The bot should check prices of all the coins in a watchlist I will define manually. It should only have placing and closing functionality."),
+        temperature = 0.7,
+        max_tokens = 16000,
+        top_p = 0.92,
+        min_p = 0.05,
+        repeat_penalty = 1.1,
+        presence_penalty = 1.0,
+        top_k = 100,
+        mirostat_eta = 0.1,
+        mirostat_tau = 5
+    )
 
-print(output['choices'][0]["text"])
+    return output['choices'][0]["text"]
+
+try:
+    model = load_model()
+    out = inference_model(model)
+    if out is not None:
+        if type(out) == str:
+            out = json.loads(out)
+    else:
+        print(f"This returned None during inference. No output from model was recevied.")
+
+    # Take the output and verify it is in the proper format
+    if 'item' in out:
+        print(out)
+    else:
+        print(f"Model output not of desired type. {type(out)}\n\n-- Output --\n{out['choices'][0]['text']}\n\nCurrent instruction is being negated.")
+except Exception as e:
+    print(f"This: An error occurred while loading LLM. Current instruction is being negated. {repr(e)}")
