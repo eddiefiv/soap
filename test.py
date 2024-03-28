@@ -4,11 +4,18 @@ from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_community.llms.llamacpp import LlamaCpp
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaTokenizer
 
 from llama_cpp import Llama
 
 from src.utils.helpers.constants import *
+
+tokenizer = AutoTokenizer.from_pretrained("NousResearch/Nous-Hermes-Llama2-13b")
+
+print(tokenizer.all_special_tokens)
+print(tokenizer.eos_token)
+
+quit(0)
 
 #system_prompt = {"role": "system", "content": SYSTEM_PROMPT_OCR_WIN_LINUX}
 system_prompt = {"role": "system", "content": "You are a professional emailer, your job is to read over the emails I give you and provide a response given my criteria."}
@@ -56,7 +63,7 @@ def load_model():
 
 def inference_model(model):
     output = model.create_completion(
-        prompt = CHAT_ML_PROMPT_FORMAT(SYSTEM_PROMPT_WIN_LINUX_NODE, "I want to make a crypto trading bot that interacts with TradingView for price data in python. The bot will trade using the DyDx API. The bot should check prices of all the coins in a watchlist I will define manually. It should only have placing and closing functionality."),
+        prompt = CHAT_ML_PROMPT_FORMAT(SYSTEM_PROMPT_WIN_LINUX_AGENT, "Develop a comprehensive crypto trading bot system. Design and implement a framework capable of interfacing with the DyDx API for price data and integrating the DyDx API for trading functionalities. Incorporate watchlist functionality into the trading bot. Develop placing functionality to analyze market conditions and execute buy/sell orders based on predefined strategies. Implement closing functionality to monitor and manage open positions according to predefined criteria such as profit targets or stop-loss levels."),
         temperature = 0.7,
         max_tokens = 16000,
         top_p = 0.92,

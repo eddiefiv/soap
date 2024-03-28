@@ -9,18 +9,21 @@ var workerConfigCounter = document.getElementById('worker-counter');
 
 // Node configs
 var nodeModelFilepath = document.getElementById('node-fp-input');
+var nodeChatFormat = document.getElementById('node-chat-format-input');
 var nodeCtxSize = document.getElementById('node-ctx-input');
 var nodeLayerCount = document.getElementById('node-layer-input');
 var nodeBatchSize = document.getElementById('node-batch-input');
 
 // Agent configs
 var agentModelFilepath = document.getElementById('agent-fp-input');
+var agentChatFormat = document.getElementById('agent-chat-format-input');
 var agentCtxSize = document.getElementById('agent-ctx-input');
 var agentLayerCount = document.getElementById('agent-layer-input');
 var agentBatchSize = document.getElementById('agent-batch-input');
 
 // Worker configs
 var workerModelFilepath = document.getElementById('worker-fp-input');
+var workerChatFormat = document.getElementById('worker-chat-format-input');
 var workerCtxSize = document.getElementById('worker-ctx-input');
 var workerLayerCount = document.getElementById('worker-layer-input');
 var workerBatchSize = document.getElementById('worker-batch-input');
@@ -119,16 +122,19 @@ function setConfigs(data) {
 
         // Model configs
         nodeModelFilepath.value = modelJson['node']['filepath'];
+        nodeChatFormat.selectedIndex = modelJson['node']['chat_format']['id'];
         nodeCtxSize.value = modelJson['node']['ctx_size'];
         nodeLayerCount.value = modelJson['node']['gpu_layer_count'];
         nodeBatchSize.value = modelJson['node']['batch_size'];
 
         agentModelFilepath.value = modelJson['agent']['filepath'];
+        agentChatFormat.selectedIndex = modelJson['agent']['chat_format']['id'];
         agentCtxSize.value = modelJson['agent']['ctx_size'];
         agentLayerCount.value = modelJson['agent']['gpu_layer_count'];
         agentBatchSize.value = modelJson['agent']['batch_size'];
 
         workerModelFilepath.value = modelJson['worker']['filepath'];
+        workerChatFormat.selectedIndex = modelJson['worker']['chat_format']['id'];
         workerCtxSize.value = modelJson['worker']['ctx_size'];
         workerLayerCount.value = modelJson['worker']['gpu_layer_count'];
         workerBatchSize.value = modelJson['worker']['batch_size'];
@@ -254,19 +260,31 @@ configSubmitButton.onclick = function () {
                 "filepath": nodeModelFilepath.value === "" ? null : nodeModelFilepath.value,
                 "ctx_size": parseInt(nodeCtxSize.value),
                 "gpu_layer_count": parseInt(nodeLayerCount.value),
-                "batch_size": parseInt(nodeBatchSize.value)
+                "batch_size": parseInt(nodeBatchSize.value),
+                "chat_format": {
+                    "format": nodeChatFormat.options[nodeChatFormat.selectedIndex].value,
+                    "id": nodeChatFormat.selectedIndex
+                }
             },
             "agent": {
                 "filepath": agentModelFilepath.value === "" ? null : agentModelFilepath.value,
                 "ctx_size": parseInt(agentCtxSize.value),
                 "gpu_layer_count": parseInt(agentLayerCount.value),
-                "batch_size": parseInt(agentBatchSize.value)
+                "batch_size": parseInt(agentBatchSize.value),
+                "chat_format": {
+                    "format": agentChatFormat.options[agentChatFormat.selectedIndex].value,
+                    "id": agentChatFormat.selectedIndex
+                }
             },
             "worker": {
                 "filepath": workerModelFilepath.value === "" ? null : workerModelFilepath.value,
                 "ctx_size": parseInt(workerCtxSize.value),
                 "gpu_layer_count": parseInt(workerLayerCount.value),
-                "batch_size": parseInt(workerBatchSize.value)
+                "batch_size": parseInt(workerBatchSize.value),
+                "chat_format": {
+                    "format": workerChatFormat.options[workerChatFormat.selectedIndex].value,
+                    "id": workerChatFormat.selectedIndex
+                }
             },
             "hyperparams": {
                 "temperature": parseFloat(temp.value),

@@ -218,7 +218,7 @@ class Worker():
             verbose = True)
         out = inference_model(
             model = model,
-            chat_format = CHAT_ML_PROMPT_FORMAT,
+            chat_format = chat_format_from_id(self.worker_config['chat_format']['id']),
             system_message = SYSTEM_PROMPT_WIN_LINUX_FINETUNED_CODE,
             user_message = description,
             hyperparams = self.global_config['network_configs']['hyperparams'])

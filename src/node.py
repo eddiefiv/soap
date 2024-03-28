@@ -146,7 +146,7 @@ class Node():
 
                 # Inference the incoming instruction and parse it down into smaller bits to then be added to the Agent Task Queue
                 ins = msg['data']['instruction']
-                await self.inference(CHAT_ML_PROMPT_FORMAT, SYSTEM_PROMPT_WIN_LINUX_NODE, ins)
+                await self.inference(chat_format_from_id(self.node_config['chat_format']['id']), SYSTEM_PROMPT_WIN_LINUX_NODE_TEST, ins)
             elif msg['type'] == "node_add_queue_item":
                 # Add item to queue
                 self.agent_task_queue.put(msg['data'])

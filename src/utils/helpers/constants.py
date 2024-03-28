@@ -64,13 +64,35 @@ MODELS_DIRECTORY = os.path.join(MAIN_DIRECTORY, 'models')
 # Navigate to the network_gen directory (where all network generated files like code are saved)
 NETWORK_GEN = os.path.join(MAIN_DIRECTORY, 'network_gen')
 
-# ---- LLM CONSTANTS ----
+# ---- LLM CHAT FORMATS ----
 
+def chat_format_from_id(id):
+    if id == 0:
+        return CHAT_ML_PROMPT_FORMAT
+    elif id == 1:
+        return INSTRUCT_PROMPT_FORMAT
+    elif id == 2:
+        return ALPACA_INSTRUCT_PROMPT_FORMAT
+    elif id == 3:
+        return LLAVA_PROMPT_FORMAT
+
+# 0
 CHAT_ML_PROMPT_FORMAT = lambda system_prompt, objective: f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\nObjective: {objective}<|im_end|>\n<|im_start|>assistant"
 
+# 1
+INSTRUCT_PROMPT_FORMAT = lambda system_prompt, objective: f"<s>[INST]<<SYS>>\n{system_prompt}<</SYS>>\n\nObjective: {objective}[/INST]</s>"
+
+# 2
+ALPACA_INSTRUCT_PROMPT_FORMAT = lambda system_prompt, objective: f"\n\n### Instruct:\n\n{system_prompt}\n\nObjective: {objective}\n\n### Response:\n\n"
+
+# 3
 LLAVA_PROMPT_FORMAT = lambda system_prompt, image, objective: f"USER: {image}\n{objective}ASSISTANT:"
 
-MISTRAL_PROMPT_FORMAT = "<s>[INST] What is your favourite condiment? [/INST] Well, I'm quite partial to a good squeeze of fresh lemon juice. It adds just the right amount of zesty flavour to whatever I'm cooking up in the kitchen!</s> [INST] Do you have mayonnaise recipes? [/INST]"
+# ---- LLM SYSTEM PROMPTS ----
+
+SYSTEM_PROMPT_WIN_LINUX_NODE_TEST = """
+You are going to be given an objective and your only job is to split the objective up into the major components that make it up.
+"""
 
 SYSTEM_PROMPT_WIN_LINUX_NODE = """
 Given the objective provided to you, and your previous actions, take the next best series of actions.

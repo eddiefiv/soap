@@ -23,6 +23,8 @@ var agentClients = [];
 var workerClients = [];
 var nodeStatus = NodeStatus.OFFLINE;
 
+var channel = null;
+
 // Try to grab the token from the file
 let DISCORD_TOKEN = null
 try {
@@ -38,18 +40,18 @@ const discordClient = new Client({
 });
 discordClient.login(DISCORD_TOKEN);
 
-// Discord channels
-const channel = discordClient.channels.cache.get(DISCORD_CHANNEL_ID);
-
 // ---- DISCORD FUNCTIONS ----
 discordClient.on('ready', () => {
+    // Discord channels
+    channel = discordClient.channels.cache.get(DISCORD_CHANNEL_ID);
+
     print(`${discordClient.user.tag} has logged in`);
 });
 discordClient.on('messageCreate', (message) => {
     // Ignore messages from self
     if (message.author.id === botID) return;
     // Listen for messages from bots
-    print(message.content);
+    //print(message.content);
 });
 
 // Serve the webui
@@ -191,12 +193,12 @@ function sendToAll(message, sender, exceptSender) {
 function sendToDiscord(content) {
     const chn = discordClient.channels.fetch(DISCORD_CHANNEL_ID);
     // Send discord embed
-    const embed = new EmbedBuilder().setColor('#0099ff').setTitle('GCP soap Server Interaction').setDescription(`\n\n**Payload**\n\n> **Originating Device**\n> ${content['origin']}\n\n> **Interaction Type**\n> ${content['type']}\n\n> **From**\n> ${content['origin']}\n\n> **Target**\n> ${content['target']}\n\n> **Metadata**\n> ${content['metadata']}`).setAuthor({ name: os.hostname(), iconURL: "https://icons.iconarchive.com/icons/elegantthemes/beautiful-flat/256/Computer-icon.png" });
+    const embed = new EmbedBuilder().setColor('#0099ff').setTitle('Ingress Node Message').setDescription(`\n\n ** Payload **\n\n > ** Originating Device **\n > ${content['origin']} \n\n > ** Interaction Type **\n > ${content['type']} \n\n > ** From **\n > ${content['origin']} \n\n > ** Target **\n > ${content['target']} \n\n > ** Metadata **\n > ${content['metadata']} `).setAuthor({ name: os.hostname(), iconURL: "https://icons.iconarchive.com/icons/elegantthemes/beautiful-flat/256/Computer-icon.png" });
 
     chn.then(channel => channel.send(({
         embeds: [embed]
     })))
-        .catch(console.error);
+        .catch(error => console.log(`Discord Send Error: ${error}`));
 }
 
 function parseMessage(unparsed, parsedmessage, ws) {
@@ -265,10 +267,10 @@ function parseMessage(unparsed, parsedmessage, ws) {
                 sendToAll(parsedmessage, ws, false);
                 break;
             default:
-                print(`Unknown message type: ${parsedmessage.type}`);
+                print(`Unknown message type: ${parsedmessage.type} `);
         }
     } catch (error) {
-        print(`Error parsing message with error: ${error}`);
+        print(`Error parsing message with error: ${error} `);
     }
 }
 
@@ -284,11 +286,11 @@ wss.on('connection', function connection(ws) {
     });
 
     ws.on('message', function incoming(message) {
-        print(`Received message: ${message}`);
+        print(`Received message: ${message} `);
         const parsedMessage = JSON.parse(message);
 
         // Send discord embed
-        const embed = new EmbedBuilder().setColor('#0099ff').setTitle('WebSocket Interaction Received').setDescription(`\n\n**Payload**\n\n> **Originating Device**\n> ${os.hostname()}\n\n> **Interaction Type**\n> ${parsedMessage.type}\n\n> **From**\n> ${parsedMessage.origin}\n\n> **Target**\n> ${parsedMessage.target}\n\n> **Metadata**\n> ${JSON.stringify(parsedMessage.data) !== '{}' ? JSON.stringify(parsedMessage.data) : "Empty"}`).setAuthor({ name: "Corporate America", iconURL: "https://icons.iconarchive.com/icons/elegantthemes/beautiful-flat/256/Computer-icon.png" });
+        const embed = new EmbedBuilder().setColor('#0099ff').setTitle('Ingress Node Message').setDescription(`\n\n ** Payload **\n\n > ** Originating Device **\n > ${os.hostname()} \n\n > ** Interaction Type **\n > ${parsedMessage.type} \n\n > ** From **\n > ${parsedMessage.origin} \n\n > ** Target **\n > ${parsedMessage.target} \n\n > ** Metadata **\n > ${JSON.stringify(parsedMessage.data) !== '{}' ? JSON.stringify(parsedMessage.data) : "Empty"} `).setAuthor({ name: os.hostname(), iconURL: "https://icons.iconarchive.com/icons/elegantthemes/beautiful-flat/256/Computer-icon.png" });
 
         if (channel) {
             channel.send({
@@ -334,7 +336,7 @@ wss.on('connection', function connection(ws) {
 });
 
 wss.on('listening', function () {
-    print(`WebSocket server is listening on localhost port ${PORT}`);
+    print(`WebSocket server is listening on localhost port ${PORT} `);
 });
 
 // ---- GCP WEBSOCKET CLIENT ----
@@ -361,6 +363,6 @@ GCPws.on('message', function (message) {
             sendToAll(comp, null, false);
             break;
         default:
-            print(`Unknown message type: ${parsedMessage['type']}`)
+            print(`Unknown message type: ${parsedMessage['type']} `)
     }
 });
