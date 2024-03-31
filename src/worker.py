@@ -190,7 +190,7 @@ class Worker():
             _p = self.worker_uuid + ".png"
             self.web_driver.save_screenshot(filename = _p)
         except Exception as e:
-            print_error("Failed to ss" + e)
+            print_error("Failed to ss" + repr(e))
 
     async def write_to_file(self, filepath, content):
         '''Writes content to a file

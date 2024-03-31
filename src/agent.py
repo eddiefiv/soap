@@ -99,7 +99,7 @@ class Agent():
                     # Maybe create a new thread to parse and run workers if the websocket keeps cutting out during task awaiting
                     await self._parse(res)
                 except Exception as e:
-                    print_error(f"Problem occurred during parsing {type(e)}: {e}")
+                    print_error(f"Problem occurred during parsing {type(e)}:\n\n{repr(e)}")
                     #self.start # Try to notify Node somehow for a more graceful shutdown
 
     async def init(self) -> int:
@@ -115,7 +115,7 @@ class Agent():
                 await self._employ_worker(self.agent_name, self.task_queue, uuid.uuid4())
                 _num_success += 1
             except Exception as e:
-                print_error(f"{self.agent_name}: Worker creation and attachment failed. Skipping.")
+                print_error(f"{self.agent_name}: Worker creation and attachment failed. Skipping.\n\n{repr(e)}")
 
         print_success(f"{self.agent_name}: Successfully created and attached {_num_success} of {_num_max_workers} Workers!")
 
@@ -143,8 +143,8 @@ class Agent():
             print_substep(f"{self.agent_name}: Sending heartbeat.", style = "bright_blue")
             try:
                 await ws.send(create_ws_message(type = "heartbeat", origin = self.agent_name, target = self._parent_node_name, data = {}))
-            except:
-                print_error("Couldnt send heartbeat. Trying again.")
+            except Exception as e:
+                print_error(f"Couldnt send heartbeat. Trying again.\n\n{repr(e)}")
             time.sleep(interval)
 
     async def dequeue(self):
@@ -164,7 +164,7 @@ class Agent():
             # Let parenting Node know an item has been pulled and dealt with
             await self.ws.send(create_ws_message(type = "agent_dequeue_success", origin = self.agent_name, target = self._parent_node_name))
         except Exception as e:
-            print_error(f"Agent Task Queue empty. Didnt retrieve any data. {e}")
+            print_error(f"Agent Task Queue empty. Didnt retrieve any data.\n\n{repr(e)}")
 
     def get_idle_workers(self):
         _idle_workers = []
@@ -249,8 +249,8 @@ class Agent():
         Example item: `MultiInstruction([SingleInstruction(WorkerTask.GOTO, "https://google.com"), SingleInstruction(WorkerTask.SCREENSHOT, None)])`'''
         try:
             self.task_queue.put(item, block = False)
-        except:
-            print_error(text = f"Insertting {item} into Task Queue, failed. It is possible the queue was full, or something else happened. Task aborted.")
+        except Exception as e:
+            print_error(text = f"Insertting {item} into Task Queue, failed. It is possible the queue was full, or something else happened. Task aborted.\n\n{repr(e)}")
 
     async def instruct(self, prompt: str, task):
         '''Passes on the prompt to the model associated with this :class:`Agent` and waits for a response.

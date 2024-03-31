@@ -142,8 +142,8 @@ if __name__ == "__main__":
                 with open(gen_config['last_config_filepath'], 'r') as f:
                     config_json = json.loads(f.read())
                 print_success(f"Config loaded from {gen_config['last_config_filepath']}")
-        except:
-            print_error("A problem occurred while attempting to read the last config filepath from gen.json. Check the filepath is correct or supply a valid config filepath using --config.")
+        except Exception as e:
+            print_error(f"A problem occurred while attempting to read the last config filepath from gen.json. Check the filepath is correct or supply a valid config filepath using --config.\n\n{repr(e)}")
             quit(1)
     else:
         # No gen found, --agent_count and --worker_count is required

@@ -77,8 +77,8 @@ class Node():
             # Let the localhost know this Node is ready
             try:
                 requests.post(f"{endpoint}/node-status", data = json.dumps({"status": "active"}), headers = {'Content-Type': 'application/json'})
-            except:
-                print_error("Could not contact backend to update Node status. This may warrant a complete Node restart.")
+            except Exception as e:
+                print_error(f"Could not contact backend to update Node status. This may warrant a complete Node restart.\n\n{repr(e)}")
 
             # Send to udpate localhost node records and audit
             await ws.send(create_ws_message(type = "node_ready", origin = self.node_name, target = gethostname()))
